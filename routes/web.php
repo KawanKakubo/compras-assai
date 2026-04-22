@@ -11,6 +11,9 @@ Route::get('/', function () {
 Route::get('/planejamento/modulo-1', [ModuleOneController::class, 'create'])->name('planning.module-one.create');
 Route::post('/planejamento/modulo-1', [ModuleOneController::class, 'store'])->name('planning.module-one.store');
 Route::get('/planejamento/modulo-1/{procurementRequest}', [ModuleOneController::class, 'show'])->name('planning.module-one.show');
+Route::get('/planejamento/modulo-1/{procurementRequest}/sd', [ModuleOneController::class, 'downloadSd'])->name('planning.module-one.download-sd');
+Route::get('/planejamento/modulo-1/{procurementRequest}/etp', [ModuleOneController::class, 'downloadEtp'])->name('planning.module-one.download-etp');
+Route::get('/planejamento/modulo-1/{procurementRequest}/tr', [ModuleOneController::class, 'downloadTr'])->name('planning.module-one.download-tr');
 
 Route::prefix('api/compras-gov')->controller(ComprasGovLookupController::class)->group(function (): void {
     Route::get('/material/items', 'materialItems');

@@ -1,0 +1,226 @@
+/* ═══════════════════════════════════════════════════
+   G-Proc Documentos — Official Print Theme
+   ═══════════════════════════════════════════════════ */
+@import url('https://fonts.googleapis.com/css2?family=Times+New+Roman&family=Arial:wght@400;700&display=swap');
+
+:root {
+  --doc-bg: #e5e7eb;
+  --paper: #ffffff;
+  --text: #000000;
+  --border: #000000;
+  --highlight: #f3f4f6;
+  --print-width: 210mm;
+  --print-padding: 2.5cm 2cm;
+}
+
+body.document-view {
+  background: var(--doc-bg);
+  font-family: 'Arial', sans-serif;
+  color: var(--text);
+  line-height: 1.5;
+  padding: 40px 20px;
+}
+
+.document-container {
+  max-width: 1000px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+/* ── Paper Sheet ──────────────────────────────────── */
+.document-sheet {
+  background: var(--paper);
+  width: var(--print-width);
+  min-height: 297mm;
+  margin: 0 auto;
+  padding: var(--print-padding);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+  position: relative;
+  box-sizing: border-box;
+}
+
+.document-sheet h1 {
+  text-align: center;
+  font-size: 14pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-bottom: 24px;
+}
+
+.document-sheet h2 {
+  font-size: 12pt;
+  font-weight: 700;
+  margin-top: 24px;
+  margin-bottom: 12px;
+}
+
+.document-sheet h3 {
+  font-size: 11pt;
+  font-weight: 700;
+  margin-top: 16px;
+  margin-bottom: 8px;
+}
+
+.document-sheet p {
+  font-size: 11pt;
+  text-align: justify;
+  margin-bottom: 12px;
+}
+
+.document-sheet ul {
+  margin-left: 20px;
+  margin-bottom: 12px;
+}
+
+.document-sheet li {
+  font-size: 11pt;
+  text-align: justify;
+  margin-bottom: 4px;
+}
+
+/* ── Header ───────────────────────────────────────── */
+.doc-header {
+  text-align: center;
+  margin-bottom: 40px;
+  border-bottom: 2px solid var(--border);
+  padding-bottom: 20px;
+}
+
+.doc-header img {
+  height: 80px;
+  margin-bottom: 10px;
+}
+
+.doc-header .gov-name {
+  font-size: 14pt;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.doc-header .secretaria-name {
+  font-size: 12pt;
+  font-weight: 700;
+}
+
+/* ── Tables ───────────────────────────────────────── */
+table.official-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 20px;
+  font-size: 10pt;
+}
+
+table.official-table th,
+table.official-table td {
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  vertical-align: top;
+}
+
+table.official-table th {
+  background: var(--highlight);
+  font-weight: 700;
+  text-align: center;
+}
+
+table.official-table td.num {
+  text-align: right;
+}
+
+table.official-table tr.total-row td {
+  font-weight: 700;
+  background: var(--highlight);
+}
+
+/* ── Signatures ───────────────────────────────────── */
+.signatures {
+  margin-top: 60px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-around;
+  gap: 40px;
+}
+
+.signature-block {
+  text-align: center;
+  width: 45%;
+  margin-bottom: 30px;
+}
+
+.signature-line {
+  border-top: 1px solid var(--border);
+  margin-bottom: 8px;
+  width: 100%;
+}
+
+.signature-block .name {
+  font-weight: 700;
+  font-size: 11pt;
+}
+
+.signature-block .role,
+.signature-block .cpf {
+  font-size: 10pt;
+}
+
+/* ── Action Bar ───────────────────────────────────── */
+.action-bar {
+  position: sticky;
+  top: 20px;
+  background: #1e2130;
+  padding: 16px 24px;
+  border-radius: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  z-index: 100;
+  color: white;
+}
+
+.action-bar .btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #6366f1;
+  color: white;
+}
+
+.action-bar .btn:hover {
+  background: #4f46e5;
+}
+
+/* ── Print Media Query ────────────────────────────── */
+@media print {
+  body.document-view {
+    background: transparent;
+    padding: 0;
+  }
+  
+  .action-bar, .no-print {
+    display: none !important;
+  }
+  
+  .document-container {
+    gap: 0;
+  }
+  
+  .document-sheet {
+    box-shadow: none;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    page-break-after: always;
+  }
+  
+  .document-sheet:last-child {
+    page-break-after: auto;
+  }
+}
