@@ -383,6 +383,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const min = prices[0];
             const max = prices[prices.length - 1];
             
+            // Set exact unit of measurement returned from PNCP to align with price
+            if (type === 'material' && data.resultado[0].unidadeMedida) {
+                const apiUnit = data.resultado[0].unidadeMedida.toUpperCase();
+                const unitInput = card.querySelector('.item-unit');
+                if (unitInput && apiUnit && apiUnit !== 'UN') {
+                    unitInput.value = apiUnit;
+                }
+            }
+            
             // Source definition from hybrid API
             const source = data.fonte || "PNCP";
             const levelClass = data.nivel === 1 ? 'color: var(--success)' : (data.nivel === 2 ? 'color: #3b82f6' : 'color: var(--warning)');

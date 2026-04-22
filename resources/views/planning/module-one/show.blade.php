@@ -6,6 +6,13 @@
     <title>Documentos - {{ $procurementRequest->reference_code }}</title>
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <link rel="stylesheet" href="{{ asset('css/documents.css') }}">
+    <script src="{{ asset('js/wizard.js') }}?v={{ time() }}"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize wizard completely empty, ready for new demands
+            Wizard.init();
+        });
+    </script>
 </head>
 <body class="document-view">
 

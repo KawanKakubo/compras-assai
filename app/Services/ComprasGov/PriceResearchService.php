@@ -10,10 +10,125 @@ class PriceResearchService
 
     private function generateHybridPriceData(int $code, string $description = '', bool $isService = false): array
     {
-        // Usa o código do item para garantir reprodutibilidade (mesmo item = mesmo preço hoje)
-        srand($code + (int)date('Ymd'));
-        
+        \Illuminate\Support\Facades\Log::info("Pesquisa PNCP Iniciada", ["desc" => $description, "code" => $code]);
         $desc = mb_strtolower($description, 'UTF-8');
+        
+        // --- 1. MINERAÇÃO EM TEMPO REAL PNCP ---
+        // Pega apenas as primeiras palavras-chave (antes da primeira vírgula) para garantir acerto na busca
+        $descParts = explode(',', $desc);
+        $shortDesc = trim($descParts[0]);
+        $words = explode(' ', $shortDesc);
+        $queryTerm = implode(' ', array_slice($words, 0, 3));
+        
+        if (!empty($queryTerm)) {
+            try {
+                $searchUrl = "https://pncp.gov.br/api/search/?q=" . urlencode($queryTerm) . "&tipos_documento=edital&ordem=relevancia";
+                $searchResponse = \Illuminate\Support\Facades\Http::timeout(5)->get($searchUrl);
+                
+                $resultadosPncp = [];
+                
+                if ($searchResponse->successful() && isset($searchResponse->json()['items'])) {
+                    $editais = array_slice($searchResponse->json()['items'], 0, 6); // Pega os 6 editais mais relevantes
+                    
+                    foreach ($editais as $edital) {
+                        $cnpj = $edital['orgao_cnpj'] ?? null;
+                        $ano = $edital['ano'] ?? null;
+                        $seq = $edital['numero_sequencial'] ?? null;
+                        
+                        if ($cnpj && $ano && $seq) {
+                            // Extrai os itens deste edital
+                            $itemsUrl = "https://pncp.gov.br/api/pncp/v1/orgaos/{$cnpj}/compras/{$ano}/{$seq}/itens";
+                            $itemsResponse = \Illuminate\Support\Facades\Http::timeout(3)->get($itemsUrl);
+                            
+                            if ($itemsResponse->successful()) {
+                                $editalItems = $itemsResponse->json();
+                                foreach ($editalItems as $eItem) {
+                                    $itemDesc = mb_strtolower($eItem['descricao'] ?? '', 'UTF-8');
+                                    
+                                    // O item dentro do edital precisa corresponder à busca!
+                                    $hasMatch = true;
+                                    foreach ($words as $word) {
+                                        $cleanWord = mb_strtolower(trim($word), 'UTF-8');
+                                        if (!empty($cleanWord) && !str_contains($itemDesc, $cleanWord)) {
+                                            $hasMatch = false;
+                                            break;
+                                        }
+                                    }
+
+                                    if ($hasMatch) {
+                                        $valor = (float) ($eItem['valorUnitarioEstimado'] ?? 0);
+                                        $unidadeBruta = $eItem['unidadeMedida'] ?? '';
+                                        
+                                        // Filtra itens absurdamente baratos ou zerados
+                                        if ($valor > 0.01) {
+                                            
+                                            // Normalizador de Unidades (Extrai quantidades de caixas, pacotes, resmas)
+                                            // Regex procura padrões como "Caixa 50", "CX C/ 100", "pct com 500"
+                                            $unidadeNormalizada = $isService ? 'SV' : 'UN';
+                                            if (!$isService && preg_match('/(\d+)/', $unidadeBruta, $matches)) {
+                                                $fator = (int) $matches[1];
+                                                if ($fator > 1 && $fator < 10000) {
+                                                    $valor = $valor / $fator; // Quebra a caixa e descobre o valor de 1 unidade real
+                                                }
+                                            } else if (!$isService && (stripos($unidadeBruta, 'cx') !== false || stripos($unidadeBruta, 'caixa') !== false)) {
+                                                // Se diz Caixa mas não tem número, assumimos cautelarmente que são 50 (Padrão canetas/lápis)
+                                                // Essa é uma proteção contra Caixas cegas de R$ 30,00 que arruínam a média.
+                                                if ($valor > 10.00 && (str_contains($desc, 'caneta') || str_contains($desc, 'lápis') || str_contains($desc, 'clipe'))) {
+                                                    $valor = $valor / 50; 
+                                                }
+                                            }
+
+                                            // Filtro Anti-Outlier Extremista (Evita o erro de R$ 60,00 numa Caneta unitária)
+                                            if (!$isService && $valor > 20.00 && (str_contains($desc, 'caneta') || str_contains($desc, 'lápis') || str_contains($desc, 'borracha') || str_contains($desc, 'régua'))) {
+                                                continue; // Ignora o lixo estatístico e pula pro próximo item
+                                            }
+                                            
+                                            if ($valor > 0.01) {
+                                                $dataCompra = substr($edital['data_publicacao_pncp'] ?? now()->toIso8601String(), 0, 10);
+                                                $orgaoNome = $edital['orgao_nome'] ?? 'PNCP';
+                                                
+                                                $res = [
+                                                    'dataCompra' => $dataCompra,
+                                                    'orgao' => $orgaoNome,
+                                                    'unidadeMedida' => $unidadeNormalizada,
+                                                    'valorUnitarioBruto' => $eItem['valorUnitarioEstimado'],
+                                                    'unidadeBruta' => $unidadeBruta
+                                                ];
+                                                
+                                                if ($isService) {
+                                                    $res['valorUnitarioHomologado'] = round($valor, 2);
+                                                } else {
+                                                    $res['valorUnitario'] = round($valor, 2);
+                                                }
+                                                
+                                                $resultadosPncp[] = $res;
+                                                break; // Achou o item correto neste edital, pula para o próximo edital
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (count($resultadosPncp) >= 2) { // Precisamos de pelo menos 2 amostras para ter uma média
+                    return [
+                        'resultado' => $resultadosPncp,
+                        'totalRegistros' => count($resultadosPncp),
+                        'totalPaginas' => 1,
+                        'paginasRestantes' => 0,
+                        'fonte' => "Mineração Real-Time: PNCP Nacional",
+                        'nivel' => 1
+                    ];
+                }
+            } catch (\Exception $e) {
+                // Silencia falha de conexão e cai para o Fallback Heurístico
+            }
+        }
+
+        // --- 2. FALLBACK: HEURÍSTICA DE MERCADO (Se o PNCP falhar ou não achar) ---
+        srand($code + (int)date('Ymd'));
         
         // Dicionário Heurístico de Preços de Mercado (Baseado na Descrição)
         if ($isService) {
