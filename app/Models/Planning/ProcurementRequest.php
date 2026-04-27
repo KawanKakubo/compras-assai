@@ -10,8 +10,20 @@ class ProcurementRequest extends Model
 {
     use HasFactory;
 
+    public const STATUS_RASCUNHO = 'rascunho';
+    public const STATUS_AGUARDANDO_GABINETE = 'aguardando_gabinete';
+    public const STATUS_APROVADO_GABINETE = 'aprovado_gabinete';
+    public const STATUS_NEGADO_GABINETE = 'negado_gabinete';
+    public const STATUS_FINALIZADO = 'finalizado';
+
+    public function user()
+    {
+        return $this->belongsTo(\App\Models\User::class);
+    }
+
     protected $fillable = [
         'reference_code',
+        'user_id',
         'secretaria',
         'title',
         'object_summary',
@@ -64,12 +76,14 @@ class ProcurementRequest extends Model
     /**
      * Generate the next sequential reference code: SD-{year}-{seq}
      */
-    public static function generateReferenceCode(): string
+    public static function generateReferenceCode(?string $acronym = null): string
     {
         $year = now()->year;
-        $prefix = "SD-{$year}-";
+        $prefix = $acronym ? "SD-{$acronym}-{$year}-" : "SD-{$year}-";
+        
+        // Find the last code with this specific prefix
         $lastCode = static::where('reference_code', 'like', "{$prefix}%")
-            ->orderByRaw('CAST(SUBSTRING(reference_code FROM ?) AS INTEGER) DESC', [strlen($prefix) + 1])
+            ->orderBy('id', 'DESC')
             ->value('reference_code');
 
         $nextSeq = 1;

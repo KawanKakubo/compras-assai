@@ -12,6 +12,11 @@
 
 <div class="wizard-container">
     <div class="wizard-header">
+        <div style="margin-bottom: 1rem; opacity: 0.8;">
+            <a href="{{ route('login') }}" style="color: var(--text-muted); text-decoration: none; font-size: 0.8rem; display: flex; align-items: center; gap: 4px; justify-content: center;">
+                <i class="ph ph-arrow-left"></i> Voltar ao Dashboard
+            </a>
+        </div>
         <h1>G-Proc</h1>
         <p>Assistente Inteligente de Planejamento da Contratação</p>
     </div>
@@ -57,12 +62,17 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label>Secretaria Requisitante *</label>
-                        <select name="secretaria" required>
-                            <option value="">Selecione a secretaria...</option>
-                            @foreach($secretarias as $key => $name)
-                                <option value="{{ $key }}">{{ $name }}</option>
-                            @endforeach
-                        </select>
+                        @if(auth()->check() && auth()->user()->isSecretaria() && auth()->user()->secretaria_name)
+                            <input type="text" value="{{ auth()->user()->secretaria_name }}" readonly style="background: rgba(255,255,255,0.05); color: var(--text-muted); cursor: not-allowed; border-color: transparent;">
+                            <input type="hidden" name="secretaria" value="{{ auth()->user()->secretaria_name }}" data-name="{{ auth()->user()->secretaria_name }}">
+                        @else
+                            <select name="secretaria" required>
+                                <option value="">Selecione a secretaria...</option>
+                                @foreach($secretarias as $key => $name)
+                                    <option value="{{ $key }}">{{ $name }}</option>
+                                @endforeach
+                            </select>
+                        @endif
                     </div>
                     <div class="form-group">
                         <label>Grau de Prioridade *</label>
@@ -97,7 +107,7 @@
                 <div class="form-row-3">
                     <div class="form-group">
                         <label>Nome do Requisitante</label>
-                        <input type="text" name="requester_name" placeholder="Quem pediu?">
+                        <input type="text" name="requester_name" value="{{ auth()->user()->name ?? '' }}" placeholder="Quem pediu?">
                     </div>
                     <div class="form-group">
                         <label>Cargo/Função</label>
@@ -105,7 +115,7 @@
                     </div>
                     <div class="form-group">
                         <label>CPF</label>
-                        <input type="text" name="requester_cpf" placeholder="000.000.000-00">
+                        <input type="text" name="requester_cpf" class="mask-cpf" placeholder="000.000.000-00">
                     </div>
                 </div>
             </div>

@@ -465,7 +465,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Just a simple visual confirmation for now
         const summary = document.getElementById('review-summary');
         const title = document.getElementById('title').value;
-        const secretaria = document.querySelector('select[name="secretaria"] option:checked').text;
+        const secretariaEl = document.querySelector('select[name="secretaria"]') || document.querySelector('input[name="secretaria"]');
+        let secretaria = '';
+        if (secretariaEl) {
+            secretaria = secretariaEl.tagName === 'SELECT' ? (secretariaEl.options[secretariaEl.selectedIndex]?.text || '') : (secretariaEl.dataset.name || secretariaEl.value);
+        }
         const total = document.getElementById('display-total-geral').textContent;
         const itemsCount = itemsContainer.querySelectorAll('.item-card').length;
         
@@ -506,6 +510,25 @@ document.addEventListener('DOMContentLoaded', () => {
             <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()" style="align-self: flex-start; height: 42px;">Remover</button>
         `;
         teamMembersContainer.appendChild(row);
+    });
+
+    // ── Masks ──────────────────────────────────────────────────────────────
+    function applyCpfMask(e) {
+        let value = e.target.value.replace(/\D/g, '');
+        if (value.length > 11) value = value.slice(0, 11);
+        
+        let masked = value;
+        if (value.length > 3) masked = value.slice(0, 3) + '.' + value.slice(3);
+        if (value.length > 6) masked = masked.slice(0, 7) + '.' + masked.slice(7);
+        if (value.length > 9) masked = masked.slice(0, 11) + '-' + masked.slice(11);
+        
+        e.target.value = masked;
+    }
+
+    document.addEventListener('input', (e) => {
+        if (e.target.classList.contains('mask-cpf')) {
+            applyCpfMask(e);
+        }
     });
 
     // ── Init ────────────────────────────────────────────────────────────────

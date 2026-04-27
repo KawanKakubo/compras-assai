@@ -18,8 +18,12 @@
 
     <div class="action-bar no-print">
         <div>
-            <h2 style="margin: 0; font-size: 1.2rem;">
-                <i class="ph ph-files"></i> Documentos Gerados — {{ $procurementRequest->reference_code }}
+            <h2 style="margin: 0; font-size: 1.2rem; display: flex; align-items: center; gap: 10px;">
+                <i class="ph ph-files"></i> 
+                Documentos Gerados — {{ $procurementRequest->reference_code }}
+                <span class="status-badge status-{{ $procurementRequest->status }}" style="font-size: 0.7rem; padding: 4px 8px; border-radius: 6px; background: rgba(255,255,255,0.1); text-transform: uppercase;">
+                    {{ str_replace('_', ' ', $procurementRequest->status) }}
+                </span>
             </h2>
             <span style="font-size: 0.85rem; color: #9ca3af;">{{ $legalFraming === 'licitacao' ? 'Licitação' : 'Dispensa de Licitação' }}</span>
         </div>

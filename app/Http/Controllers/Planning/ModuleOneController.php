@@ -16,13 +16,17 @@ class ModuleOneController extends Controller
 {
     public function create(): View
     {
+        $user = auth()->user();
+        $acronym = $user?->isSecretaria() ? $user->secretaria_acronym : null;
+
         return view('planning.module-one.create', [
             'thresholds' => config('compras.lei_14133.dispensa.art75'),
             'secretarias' => config('compras.secretarias'),
             'prioridades' => config('compras.prioridades'),
             'unidadesComuns' => config('compras.unidades_comuns'),
             'programaMunicipal' => config('compras.programa_municipal'),
-            'nextReferenceCode' => ProcurementRequest::generateReferenceCode(),
+            'nextReferenceCode' => ProcurementRequest::generateReferenceCode($acronym),
+            'currentUser' => $user,
         ]);
     }
 
@@ -59,12 +63,12 @@ class ModuleOneController extends Controller
                 'responsible_role',
             ]);
 
-            // Auto-generate reference code if not provided
             if (empty($requestData['reference_code'])) {
                 $requestData['reference_code'] = ProcurementRequest::generateReferenceCode();
             }
 
-            $requestData['status'] = 'draft';
+            $requestData['user_id'] = auth()->id();
+            $requestData['status'] = ProcurementRequest::STATUS_AGUARDANDO_GABINETE;
             $requestData['requisition_unit'] = $validated['secretaria'] ?? null;
 
             $procurementRequest = ProcurementRequest::create($requestData);
