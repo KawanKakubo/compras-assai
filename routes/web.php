@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Planning\ModuleOneController;
+use App\Http\Controllers\Api\ComprasGovLookupController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
