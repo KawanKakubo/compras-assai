@@ -15,6 +15,18 @@
     </div>
 @endif
 
+@if (session('success'))
+    <div style="background: rgba(16, 185, 129, 0.1); color: #10b981; padding: 1rem; border-radius: 12px; margin-bottom: 2rem; border: 1px solid rgba(16, 185, 129, 0.2);">
+        {{ session('success') }}
+    </div>
+@endif
+
+@if (session('error'))
+    <div style="background: rgba(239, 68, 68, 0.1); color: #ef4444; padding: 1rem; border-radius: 12px; margin-bottom: 2rem; border: 1px solid rgba(239, 68, 68, 0.2);">
+        {{ session('error') }}
+    </div>
+@endif
+
 <div style="display: grid; grid-template-columns: 1fr 350px; gap: 2rem;">
     <!-- Users List -->
     <div class="card">
@@ -28,6 +40,7 @@
                         <th>Email</th>
                         <th>Nível</th>
                         <th>Secretaria</th>
+                        <th>Ações</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -36,11 +49,25 @@
                         <td>{{ $user->name }}</td>
                         <td>{{ $user->email }}</td>
                         <td>
-                            <span class="badge {{ $user->isAdmin() ? 'badge-success' : 'badge-pending' }}">
+                            <span class="badge {{ $user->role === 'admin' ? 'badge-success' : 'badge-pending' }}">
                                 {{ ucfirst($user->role) }}
                             </span>
                         </td>
                         <td>{{ $user->secretaria_name ?? '-' }}</td>
+                        <td>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <a href="{{ route('admin.users.edit', $user) }}" class="btn" style="padding: 0.4rem 0.8rem; background: rgba(37, 99, 235, 0.1); color: #2563eb; border: 1px solid rgba(37, 99, 235, 0.2);">
+                                    <i class="ph ph-note-pencil"></i>
+                                </a>
+                                <form action="{{ route('admin.users.destroy', $user) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja excluir este usuário?')">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="btn" style="padding: 0.4rem 0.8rem; background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2);">
+                                        <i class="ph ph-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
                     </tr>
                     @endforeach
                 </tbody>

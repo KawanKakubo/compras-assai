@@ -21,6 +21,9 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/dashboard', 'dashboard')->name('admin.dashboard');
         Route::get('/users', 'indexUsers')->name('admin.users.index');
         Route::post('/users', 'storeUser')->name('admin.users.store');
+        Route::get('/users/{user}/edit', 'editUser')->name('admin.users.edit');
+        Route::put('/users/{user}', 'updateUser')->name('admin.users.update');
+        Route::delete('/users/{user}', 'destroyUser')->name('admin.users.destroy');
     });
 
     // Secretaria
