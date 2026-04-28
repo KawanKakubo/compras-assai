@@ -62,6 +62,11 @@
             
             <div class="final-actions">
                 @if($procurementRequest->canBeSigned() && auth()->user()->isSecretario())
+                    @if(config('assinador.bypass') && app()->isLocal())
+                        <button class="btn-gabinete" style="background: #059669; box-shadow: 0 4px 14px rgba(5, 150, 105, 0.4); margin-bottom: 8px;" onclick="directBypassAuthorize()">
+                            <i class="ph ph-check-circle"></i> Autorizar (Modo Teste)
+                        </button>
+                    @endif
                     <button class="btn-gabinete" style="background: #7c3aed; box-shadow: 0 4px 14px rgba(124, 58, 237, 0.4);" onclick="openSignatureModal()">
                         <i class="ph ph-pen-nib"></i> Assinar Agora
                     </button>
@@ -197,6 +202,8 @@
             mfaStepVerify.style.display = 'none';
         }
 
+        let currentChallengeId = null;
+
         async function requestMfa() {
             const btn = document.getElementById('btn-send-mfa');
             btn.disabled = true;
@@ -210,6 +217,7 @@
                 const data = await response.json();
                 
                 if (data.success) {
+                    currentChallengeId = data.challenge_id;
                     mfaStepRequest.style.display = 'none';
                     mfaStepVerify.style.display = 'block';
                 } else {
@@ -241,7 +249,10 @@
                         'Content-Type': 'application/json',
                         'X-CSRF-TOKEN': '{{ csrf_token() }}' 
                     },
-                    body: JSON.stringify({ mfa_code: code })
+                    body: JSON.stringify({ 
+                        mfa_code: code,
+                        challenge_id: currentChallengeId
+                    })
                 });
                 const data = await response.json();
 
@@ -256,6 +267,38 @@
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = 'Confirmar e Assinar PDF';
+            }
+        }
+        async function directBypassAuthorize() {
+            if (!confirm('Deseja autorizar este documento em modo de teste (sem assinatura real)?')) return;
+
+            const btn = event.currentTarget;
+            const originalContent = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="ph ph-circle-notch ph-spin"></i> Autorizando...';
+
+            try {
+                const response = await fetch("{{ route('planning.signature.sign', $procurementRequest) }}", {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}' 
+                    },
+                    body: JSON.stringify({ mfa_code: '000000' }) // Código irrelevante no modo bypass
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(data.message);
+                    window.location.href = data.redirect;
+                } else {
+                    alert(data.message);
+                }
+            } catch (e) {
+                alert('Erro ao processar autorização.');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalContent;
             }
         }
     </script>

@@ -168,7 +168,7 @@ class PriceResearchService
             $variacaoMedia = 0.10; // 10% de variação (região)
         } else {
             $nivel = 3;
-            $fonte = "Estimativa Heurística - G-Proc Analytics";
+            $fonte = "Estimativa Heurística - Compras Assaí Analytics";
             $variacaoMedia = 0.15; // 15% de variação
         }
 

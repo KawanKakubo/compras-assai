@@ -21,93 +21,125 @@ class SignatureController extends Controller
     }
 
     /**
-     * Passo 1: Solicita desafio MFA via WhatsApp
+     * Passo 1 e 2: Obtém JWT do Gov e solicita desafio MFA no Assinador.
      */
     public function requestMfa(ProcurementRequest $procurementRequest)
     {
-        $user = auth()->user();
-        
-        // Tenta pegar o celular do usuário (se existir campo no banco, senão mockamos para teste)
-        // O guia diz que o Assinador gera o código e dispara webhook para o Gov
+        // BYPASS para desenvolvimento
+        if (config('assinador.bypass') && app()->environment('local')) {
+            return response()->json([
+                'success' => true,
+                'challenge_id' => 'mock_challenge_' . $procurementRequest->id,
+                'message' => '[MOCK] Modo de teste ativado. Digite qualquer código para prosseguir.'
+            ]);
+        }
+
         try {
-            $cpf = preg_replace('/\D/', '', $procurementRequest->requester_cpf);
+            $user = auth()->user();
             
-            // Inicia o desafio no Assinador
-            $challenge = $this->assinador->requestMfa($cpf, 'whatsapp');
+            // 1. Gera o conteúdo do PDF para obter o Hash (Integridade)
+            $pdfContent = $this->generatePdfContent($procurementRequest);
+            $docHash = hash('sha256', $pdfContent);
+            $docUuid = (string) $procurementRequest->id;
+
+            // 2. Solicita Token JWT ao Gov.Assaí (Passo 1 do Guia)
+            // Aqui enviamos os dados do signatário e o hash do documento
+            $jwt = $this->assinador->getGovSigningToken([
+                'cpf' => preg_replace('/\D/', '', $procurementRequest->requester_cpf),
+                'name' => $procurementRequest->requester_name ?? $user->name,
+                'email' => $user->email,
+                'doc_uuid' => $docUuid,
+                'doc_hash' => $docHash,
+            ]);
+
+            // 3. Inicia o desafio MFA no Assinador (Passo 2 do Guia)
+            $challenge = $this->assinador->requestMfa($jwt, $docUuid, $docHash, 'whatsapp');
+
+            // Armazena o JWT e o Hash na sessão para o próximo passo (segurança)
+            session([
+                "signature_jwt_{$docUuid}" => $jwt,
+                "signature_hash_{$docUuid}" => $docHash
+            ]);
 
             return response()->json([
                 'success' => true,
-                'challenge_id' => $challenge['challenge_id'] ?? 'dummy_id',
+                'challenge_id' => $challenge['id'] ?? $challenge['challenge_id'],
                 'message' => 'Código enviado via WhatsApp.'
             ]);
+
         } catch (\Exception $e) {
+            Log::error('Erro ao solicitar MFA: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Erro ao solicitar MFA: ' . $e->getMessage()
+                'message' => 'Erro ao iniciar fluxo de assinatura: ' . $e->getMessage()
             ], 500);
         }
     }
 
     /**
-     * Passo 2: Verifica código e assina
+     * Passo 3 e 4: Verifica código MFA e realiza a assinatura definitiva.
      */
     public function sign(Request $request, ProcurementRequest $procurementRequest)
     {
+        // BYPASS para desenvolvimento
+        if (config('assinador.bypass') && app()->environment('local')) {
+            $pdfContent = $this->generatePdfContent($procurementRequest);
+            $path = 'signatures/' . $procurementRequest->reference_code . '_mocked.pdf';
+            Storage::put('public/' . $path, $pdfContent);
+
+            $procurementRequest->update([
+                'status' => ProcurementRequest::STATUS_EM_ANALISE,
+                'signed_at' => now(),
+                'signature_hash' => 'MOCKED_SIGNATURE_' . uniqid(),
+                'signed_file_path' => $path,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => '[MOCK] Documento autorizado com sucesso (Sem Assinatura Digital)!',
+                'redirect' => route('planning.module-one.show', $procurementRequest)
+            ]);
+        }
+
         $request->validate([
             'mfa_code' => 'required|string|size:6',
         ]);
 
+        $docUuid = (string) $procurementRequest->id;
+        $jwt = session("signature_jwt_{$docUuid}");
+        $challengeId = $request->challenge_id; // Frontend deve passar isso
+
+        if (!$jwt) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Sessão de assinatura expirada. Inicie o processo novamente.'
+            ], 403);
+        }
+
         try {
-            $user = auth()->user();
-            
-            // 1. Gera o PDF do documento (SD) para assinatura
-            // Reutilizamos a lógica da view para gerar o HTML e converter em PDF
-            $html = view('planning.module-one.pdf_template', [
-                'procurementRequest' => $procurementRequest,
-                'items' => $procurementRequest->items,
-                'study' => $procurementRequest->studies->first(),
-                'totalEstimated' => $procurementRequest->items->sum('total_value'),
-                'prioridades' => config('compras.prioridades'),
-                'secretarias' => config('compras.secretarias'),
-                'legalFraming' => $this->calculateLegalFraming($procurementRequest)
-            ])->render();
+            // 1. Verifica Código e obtém Autorização de Assinatura (Passo 3 do Guia)
+            $signingToken = $this->assinador->verifyMfa($jwt, $challengeId, $request->mfa_code);
 
-            $pdf = Pdf::loadHTML($html);
-            $pdfContent = $pdf->output();
+            // 2. Gera o PDF novamente para garantir que nada mudou
+            $pdfContent = $this->generatePdfContent($procurementRequest);
 
-            // 2. Solicita Token JWT (RS256) ao Gov IdP
-            $tokenResponse = Http::post(config('assinador.gov_idp_url') . '/api/internal/issue-signing-token', [
-                'sub' => (string) $user->id,
-                'cpf' => preg_replace('/\D/', '', $procurementRequest->requester_cpf),
-                'name' => $user->name,
-                'doc_uuid' => (string) $procurementRequest->id,
-                'doc_hash' => hash('sha256', $pdfContent),
-                'scope' => 'sign:advanced',
-            ]);
+            // 3. Realiza a assinatura avançada (Passo 4 do Guia)
+            $result = $this->assinador->signAdvanced($signingToken, $pdfContent, $docUuid);
 
-            if (!$tokenResponse->successful()) {
-                throw new \Exception('Falha ao obter token de assinatura do IdP.');
-            }
-
-            $jwt = $tokenResponse->json('token');
-
-            // 3. Chama o Assinador para aplicar a assinatura PAdES
-            $result = $this->assinador->signAdvanced($jwt, $pdfContent, $request->mfa_code, (string) $procurementRequest->id);
-
-            // 4. Salva o PDF assinado e atualiza status
+            // 4. Salva o PDF assinado
             $path = 'signatures/' . $procurementRequest->reference_code . '_signed.pdf';
             Storage::put('public/' . $path, $result['pdf_content']);
 
-            $procurementRequest->status = ProcurementRequest::STATUS_ASSINADO;
-            $procurementRequest->signed_at = now();
-            $procurementRequest->signed_file_path = $path;
-            $procurementRequest->save();
-
+            // 5. Atualiza o banco de dados - Já envia para o Gabinete
             $procurementRequest->update([
+                'status' => ProcurementRequest::STATUS_EM_ANALISE,
                 'signed_at' => now(),
                 'signature_hash' => $result['hash'],
                 'signed_file_path' => $path,
             ]);
+
+            // Limpa a sessão
+            session()->forget(["signature_jwt_{$docUuid}", "signature_hash_{$docUuid}"]);
 
             return response()->json([
                 'success' => true,
@@ -122,6 +154,24 @@ class SignatureController extends Controller
                 'message' => 'Erro ao assinar: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Auxiliar para gerar o conteúdo do PDF.
+     */
+    protected function generatePdfContent(ProcurementRequest $procurementRequest): string
+    {
+        $html = view('planning.module-one.pdf_template', [
+            'procurementRequest' => $procurementRequest,
+            'items' => $procurementRequest->items,
+            'study' => $procurementRequest->studies->first(),
+            'totalEstimated' => $procurementRequest->items->sum('total_value'),
+            'prioridades' => config('compras.prioridades'),
+            'secretarias' => config('compras.secretarias'),
+            'legalFraming' => $this->calculateLegalFraming($procurementRequest)
+        ])->render();
+
+        return Pdf::loadHTML($html)->output();
     }
 
     protected function calculateLegalFraming($request)

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>G-Proc — Inteligência em Compras</title>
+    <title>Compras Assaí — Inteligência em Compras</title>
     <!-- Phosphor Icons para iconografia moderna -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <link rel="stylesheet" href="{{ asset('css/wizard.css') }}">
@@ -17,7 +17,7 @@
                 <i class="ph ph-arrow-left"></i> Voltar ao Dashboard
             </a>
         </div>
-        <h1>G-Proc</h1>
+        <h1>Compras Assaí</h1>
         <p>Assistente Inteligente de Planejamento da Contratação</p>
     </div>
 
