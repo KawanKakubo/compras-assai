@@ -33,12 +33,12 @@ class StorePlanningModuleRequest extends FormRequest
             'priority_level' => ['required', 'in:low,medium,high'],
             'priority_justification' => ['nullable', 'required_if:priority_level,high', 'string'],
             'planned_conclusion_at' => ['nullable', 'date'],
-            'requester_name' => ['nullable', 'string', 'max:255'],
-            'requester_cpf' => ['nullable', 'string', 'max:14'],
-            'requester_role' => ['nullable', 'string', 'max:255'],
-            'responsible_name' => ['nullable', 'string', 'max:255'],
-            'responsible_cpf' => ['nullable', 'string', 'max:14'],
-            'responsible_role' => ['nullable', 'string', 'max:255'],
+            'requester_name' => ['required', 'string', 'max:255'],
+            'requester_cpf' => ['required', 'string', 'max:14'],
+            'requester_role' => ['required', 'string', 'max:255'],
+            'responsible_name' => ['required', 'string', 'max:255'],
+            'responsible_cpf' => ['required', 'string', 'max:14'],
+            'responsible_role' => ['required', 'string', 'max:255'],
 
             // ── Step 2: Need & Justification ────────────────────
             'need_justification' => ['required', 'string'],

@@ -99,7 +99,8 @@
             <div style="margin-bottom: 1.2rem;">
                 <label style="display:block; margin-bottom:0.5rem; font-size:0.9rem; color:var(--text-muted);">Nível de Acesso</label>
                 <select name="role" required style="width:100%; background:var(--dark-bg); border:1px solid var(--border); padding:0.8rem; border-radius:10px; color:#fff;">
-                    <option value="secretaria">Secretaria</option>
+                    <option value="elaborador">Secretaria (Elaborador)</option>
+                    <option value="secretario">Secretaria (Diretor/Secretário)</option>
                     <option value="gabinete">Gabinete</option>
                     <option value="compras">Setor de Compras</option>
                     <option value="admin">Administrador</option>

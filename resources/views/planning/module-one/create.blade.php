@@ -104,18 +104,42 @@
             <div class="card">
                 <div class="card-title"><i class="ph ph-user"></i> Servidores Responsáveis</div>
                 
-                <div class="form-row-3">
-                    <div class="form-group">
-                        <label>Nome do Requisitante</label>
-                        <input type="text" name="requester_name" value="{{ auth()->user()->name ?? '' }}" placeholder="Quem pediu?">
+                <div style="margin-bottom: 2rem;">
+                    <h4 style="margin-bottom: 1rem; color: var(--accent); font-size: 0.9rem; text-transform: uppercase;">1. Requisitante (Quem está pedindo)</h4>
+                    <div class="form-row-3">
+                        <div class="form-group">
+                            <label>Nome do Requisitante *</label>
+                            <input type="text" name="requester_name" value="{{ auth()->user()->name ?? '' }}" required placeholder="Nome completo">
+                        </div>
+                        <div class="form-group">
+                            <label>Cargo/Função *</label>
+                            <input type="text" name="requester_role" required placeholder="Ex: Diretor de Saúde">
+                        </div>
+                        <div class="form-group">
+                            <label>CPF *</label>
+                            <input type="text" name="requester_cpf" class="mask-cpf" required placeholder="000.000.000-00">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Cargo/Função</label>
-                        <input type="text" name="requester_role" placeholder="Cargo">
-                    </div>
-                    <div class="form-group">
-                        <label>CPF</label>
-                        <input type="text" name="requester_cpf" class="mask-cpf" placeholder="000.000.000-00">
+                </div>
+
+                <hr style="border: 0; border-top: 1px solid var(--border); margin: 2rem 0;">
+
+                <div>
+                    <h4 style="margin-bottom: 1rem; color: var(--accent); font-size: 0.9rem; text-transform: uppercase;">2. Autoridade Responsável (Quem assina)</h4>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">Geralmente o Secretário da pasta ou Diretor Geral.</p>
+                    <div class="form-row-3">
+                        <div class="form-group">
+                            <label>Nome da Autoridade *</label>
+                            <input type="text" name="responsible_name" required placeholder="Nome completo">
+                        </div>
+                        <div class="form-group">
+                            <label>Cargo/Função *</label>
+                            <input type="text" name="responsible_role" required placeholder="Ex: Secretário Municipal">
+                        </div>
+                        <div class="form-group">
+                            <label>CPF *</label>
+                            <input type="text" name="responsible_cpf" class="mask-cpf" required placeholder="000.000.000-00">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -265,6 +289,20 @@
             </div>
 
             <div class="card">
+                <div class="card-title"><i class="ph ph-list-magnifying-glass"></i> Detalhamento da Necessidade (ETP)</div>
+                <div class="form-group">
+                    <label>Descrição da Necessidade <span class="hint">(ETP Seção 2.1)</span></label>
+                    <div class="hint">Descreva o problema identificado e a demanda administrativa de forma clara.</div>
+                    <textarea name="study[need_description]" rows="3" placeholder="Se vazio, usará a justificativa geral..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Motivação/Justificativa Detalhada <span class="hint">(ETP Seção 2.2)</span></label>
+                    <div class="hint">Apresente os motivos que levaram a esta contratação e sua relação com as atividades do órgão.</div>
+                    <textarea name="study[motivation]" rows="3" placeholder="Se vazio, usará a justificativa geral..."></textarea>
+                </div>
+            </div>
+
+            <div class="card">
                 <div class="card-title"><i class="ph ph-arrows-split"></i> Alternativas e Parcelamento</div>
                 <div class="form-group">
                     <label>Levantamento de Soluções Disponíveis <span class="legal-ref">Art. 18, § 1º, V</span></label>
@@ -400,8 +438,7 @@
                 <div>
                     Ao confirmar, o sistema irá gerar os seguintes documentos em conformidade com os templates oficiais do município:<br>
                     <strong>1. Solicitação de Demanda (SD)</strong><br>
-                    <strong>2. Estudo Técnico Preliminar (ETP)</strong><br>
-                    <strong>3. Termo de Referência (TR) Preliminar</strong>
+                    <strong>2. Estudo Técnico Preliminar (ETP)</strong>
                 </div>
             </div>
         </div>

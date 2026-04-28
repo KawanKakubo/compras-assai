@@ -11,7 +11,7 @@ class DashboardController extends Controller
     public function dashboard()
     {
         $requests = ProcurementRequest::with('user')
-            ->where('status', ProcurementRequest::STATUS_APROVADO_GABINETE)
+            ->where('status', ProcurementRequest::STATUS_APROVADO_COMPRAS)
             ->latest()
             ->get();
 
@@ -30,5 +30,21 @@ class DashboardController extends Controller
         $procurementRequest->save();
 
         return redirect()->back()->with('success', 'Processo de compra finalizado!');
+    }
+
+    public function requestComplement($id, Request $request)
+    {
+        $procurementRequest = ProcurementRequest::findOrFail($id);
+        $procurementRequest->status = ProcurementRequest::STATUS_DEVOLVIDO;
+        
+        if ($request->has('justification')) {
+            $metadata = $procurementRequest->metadata ?? [];
+            $metadata['return_justification'] = $request->justification;
+            $procurementRequest->metadata = $metadata;
+        }
+
+        $procurementRequest->save();
+
+        return redirect()->back()->with('success', 'Solicitação devolvida para complementação.');
     }
 }

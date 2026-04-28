@@ -12,7 +12,7 @@ class AdminController extends Controller
     public function dashboard()
     {
         $usersCount = User::count();
-        $secretariasCount = User::where('role', User::ROLE_SECRETARIA)->count();
+        $secretariasCount = User::whereIn('role', [User::ROLE_ELABORADOR, User::ROLE_SECRETARIO])->count();
         $recentUsers = User::latest()->take(5)->get();
         
         return view('admin.dashboard', compact('usersCount', 'secretariasCount', 'recentUsers'));
@@ -30,7 +30,7 @@ class AdminController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:8',
-            'role' => 'required|in:admin,secretaria,gabinete,compras',
+            'role' => 'required|in:admin,elaborador,secretario,gabinete,compras',
             'secretaria_name' => 'nullable|string|max:255',
             'secretaria_acronym' => 'nullable|string|max:20',
         ]);
@@ -58,7 +58,7 @@ class AdminController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
             'password' => 'nullable|string|min:8',
-            'role' => 'required|in:admin,secretaria,gabinete,compras',
+            'role' => 'required|in:admin,elaborador,secretario,gabinete,compras',
             'secretaria_name' => 'nullable|string|max:255',
             'secretaria_acronym' => 'nullable|string|max:20',
         ]);

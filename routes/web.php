@@ -27,8 +27,8 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/users/{user}', 'destroyUser')->name('admin.users.destroy');
     });
 
-    // Secretaria
-    Route::middleware(['role:secretaria'])->prefix('secretaria')->controller(\App\Http\Controllers\Secretaria\DashboardController::class)->group(function () {
+    // Secretaria (Elaboradores e Secretários)
+    Route::middleware(['role:elaborador,secretario'])->prefix('secretaria')->controller(\App\Http\Controllers\Secretaria\DashboardController::class)->group(function () {
         Route::get('/dashboard', 'dashboard')->name('secretaria.dashboard');
         
         // Intelligent Form (Module 1)
@@ -47,13 +47,14 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware(['role:compras'])->prefix('compras')->controller(\App\Http\Controllers\Compras\DashboardController::class)->group(function () {
         Route::get('/dashboard', 'dashboard')->name('compras.dashboard');
         Route::post('/request/{id}/finalize', 'finalize')->name('compras.finalize');
+        Route::post('/request/{id}/complement', 'requestComplement')->name('compras.complement');
     });
 
     // Shared Procurement Routes (Show/Download)
     Route::get('/planejamento/modulo-1/{procurementRequest}', [ModuleOneController::class, 'show'])->name('planning.module-one.show');
     Route::get('/planejamento/modulo-1/{procurementRequest}/sd', [ModuleOneController::class, 'downloadSd'])->name('planning.module-one.download-sd');
     Route::get('/planejamento/modulo-1/{procurementRequest}/etp', [ModuleOneController::class, 'downloadEtp'])->name('planning.module-one.download-etp');
-    Route::get('/planejamento/modulo-1/{procurementRequest}/tr', [ModuleOneController::class, 'downloadTr'])->name('planning.module-one.download-tr');
+    Route::post('/planejamento/modulo-1/{procurementRequest}/submit', [ModuleOneController::class, 'submitToGabinete'])->name('planning.module-one.submit');
 
     // Digital Signature
     Route::post('/planejamento/modulo-1/{procurementRequest}/signature/request-mfa', [\App\Http\Controllers\Planning\SignatureController::class, 'requestMfa'])->name('planning.signature.request-mfa');

@@ -36,9 +36,9 @@
         <div>
             <label style="display:block; margin-bottom:0.5rem; font-size:0.9rem; color:var(--text-muted);">Status</label>
             <select name="status" style="width:100%; background:var(--dark-bg); border:1px solid var(--border); padding:0.8rem; border-radius:10px; color:#fff;">
-                <option value="aguardando_gabinete" {{ request('status') == 'aguardando_gabinete' ? 'selected' : '' }}>Pendentes</option>
-                <option value="aprovado_gabinete" {{ request('status') == 'aprovado_gabinete' ? 'selected' : '' }}>Aprovadas</option>
-                <option value="negado_gabinete" {{ request('status') == 'negado_gabinete' ? 'selected' : '' }}>Negadas</option>
+                <option value="em_analise" {{ request('status') == 'em_analise' ? 'selected' : '' }}>Pendentes</option>
+                <option value="aprovado_compras" {{ request('status') == 'aprovado_compras' ? 'selected' : '' }}>Aprovadas</option>
+                <option value="rejeitado" {{ request('status') == 'rejeitado' ? 'selected' : '' }}>Rejeitadas</option>
             </select>
         </div>
         <button type="submit" class="btn btn-primary">
@@ -70,8 +70,22 @@
                     <td>{{ $req->title }}</td>
                     <td>{{ $req->created_at->format('d/m/Y') }}</td>
                     <td>
-                        <span class="badge {{ $req->status === 'aguardando_gabinete' ? 'badge-pending' : ($req->status === 'aprovado_gabinete' ? 'badge-success' : 'badge-danger') }}">
-                            {{ ucfirst(str_replace('_', ' ', $req->status)) }}
+                        @php
+                            $statusClasses = [
+                                'em_analise' => 'badge-pending',
+                                'aprovado_compras' => 'badge-success',
+                                'rejeitado' => 'badge-danger',
+                                'devolvido' => 'badge-warning',
+                            ];
+                            $statusLabels = [
+                                'em_analise' => 'Em Análise',
+                                'aprovado_compras' => 'Aprovado',
+                                'rejeitado' => 'Rejeitado',
+                                'devolvido' => 'Devolvido',
+                            ];
+                        @endphp
+                        <span class="badge {{ $statusClasses[$req->status] ?? 'badge-secondary' }}">
+                            {{ $statusLabels[$req->status] ?? ucfirst(str_replace('_', ' ', $req->status)) }}
                         </span>
                     </td>
                     <td style="display: flex; gap: 10px;">
@@ -79,19 +93,30 @@
                             <i class="fa-solid fa-eye"></i>
                         </a>
                         
-                        @if($req->status === 'aguardando_gabinete')
+                        @if($req->status === 'em_analise')
                         <form action="{{ route('gabinete.approve', $req->id) }}" method="POST">
                             @csrf
-                            <button type="submit" class="btn" style="background: rgba(16, 185, 129, 0.1); color: #10b981; padding: 0.5rem 1rem;">
+                            <button type="submit" class="btn" title="Aprovar" style="background: rgba(16, 185, 129, 0.1); color: #10b981; padding: 0.5rem 1rem;">
                                 <i class="fa-solid fa-check"></i>
                             </button>
                         </form>
-                        <form action="{{ route('gabinete.deny', $req->id) }}" method="POST">
-                            @csrf
-                            <button type="submit" class="btn" style="background: rgba(239, 68, 68, 0.1); color: #ef4444; padding: 0.5rem 1rem;">
-                                <i class="fa-solid fa-xmark"></i>
-                            </button>
-                        </form>
+                        <button type="button" class="btn" title="Rejeitar" 
+                                onclick="document.getElementById('reject-form-{{ $req->id }}').style.display = 'block'"
+                                style="background: rgba(239, 68, 68, 0.1); color: #ef4444; padding: 0.5rem 1rem;">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+
+                        <div id="reject-form-{{ $req->id }}" style="display:none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--card-bg); padding: 2rem; border-radius: 15px; border: 1px solid var(--border); z-index: 1000; width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+                            <h4>Justificativa da Rejeição</h4>
+                            <form action="{{ route('gabinete.deny', $req->id) }}" method="POST">
+                                @csrf
+                                <textarea name="justification" required style="width: 100%; height: 100px; background: var(--dark-bg); color: #fff; border: 1px solid var(--border); padding: 10px; border-radius: 8px; margin: 15px 0;" placeholder="Informe o motivo da rejeição..."></textarea>
+                                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                                    <button type="button" class="btn" onclick="this.parentElement.parentElement.parentElement.style.display = 'none'">Cancelar</button>
+                                    <button type="submit" class="btn btn-primary">Confirmar Rejeição</button>
+                                </div>
+                            </form>
+                        </div>
                         @endif
                     </td>
                 </tr>

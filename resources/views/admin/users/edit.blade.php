@@ -39,7 +39,8 @@
             <div style="margin-bottom: 1.2rem;">
                 <label style="display:block; margin-bottom:0.5rem; font-size:0.9rem; color:var(--text-muted);">Nível de Acesso</label>
                 <select name="role" required style="width:100%; background:var(--dark-bg); border:1px solid var(--border); padding:0.8rem; border-radius:10px; color:#fff;">
-                    <option value="secretaria" {{ $user->role === 'secretaria' ? 'selected' : '' }}>Secretaria</option>
+                    <option value="elaborador" {{ $user->role === 'elaborador' ? 'selected' : '' }}>Secretaria (Elaborador)</option>
+                    <option value="secretario" {{ $user->role === 'secretario' ? 'selected' : '' }}>Secretaria (Diretor/Secretário)</option>
                     <option value="gabinete" {{ $user->role === 'gabinete' ? 'selected' : '' }}>Gabinete</option>
                     <option value="compras" {{ $user->role === 'compras' ? 'selected' : '' }}>Setor de Compras</option>
                     <option value="admin" {{ $user->role === 'admin' ? 'selected' : '' }}>Administrador</option>

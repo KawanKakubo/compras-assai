@@ -15,7 +15,8 @@ use Illuminate\Notifications\Notifiable;
     class User extends Authenticatable
     {
         public const ROLE_ADMIN = 'admin';
-        public const ROLE_SECRETARIA = 'secretaria';
+        public const ROLE_ELABORADOR = 'elaborador';
+        public const ROLE_SECRETARIO = 'secretario';
         public const ROLE_GABINETE = 'gabinete';
         public const ROLE_COMPRAS = 'compras';
 
@@ -24,9 +25,19 @@ use Illuminate\Notifications\Notifiable;
             return $this->role === self::ROLE_ADMIN;
         }
 
+        public function isElaborador(): bool
+        {
+            return $this->role === self::ROLE_ELABORADOR;
+        }
+
+        public function isSecretario(): bool
+        {
+            return $this->role === self::ROLE_SECRETARIO;
+        }
+
         public function isSecretaria(): bool
         {
-            return $this->role === self::ROLE_SECRETARIA;
+            return in_array($this->role, [self::ROLE_ELABORADOR, self::ROLE_SECRETARIO]);
         }
 
         public function isGabinete(): bool

@@ -15,7 +15,7 @@ class DashboardController extends Controller
 
         // Filter by status if needed, but default is pending
         if (!$request->has('status')) {
-            $query->where('status', ProcurementRequest::STATUS_AGUARDANDO_GABINETE);
+            $query->where('status', ProcurementRequest::STATUS_EM_ANALISE);
         } else {
             $query->where('status', $request->status);
         }
@@ -26,12 +26,12 @@ class DashboardController extends Controller
         }
 
         $requests = $query->latest()->get();
-        $secretarias = User::where('role', User::ROLE_SECRETARIA)->get();
+        $secretarias = User::whereIn('role', [User::ROLE_ELABORADOR, User::ROLE_SECRETARIO])->get();
 
         $stats = [
-            'pending' => ProcurementRequest::where('status', ProcurementRequest::STATUS_AGUARDANDO_GABINETE)->count(),
-            'approved' => ProcurementRequest::where('status', ProcurementRequest::STATUS_APROVADO_GABINETE)->count(),
-            'denied' => ProcurementRequest::where('status', ProcurementRequest::STATUS_NEGADO_GABINETE)->count(),
+            'pending' => ProcurementRequest::where('status', ProcurementRequest::STATUS_EM_ANALISE)->count(),
+            'approved' => ProcurementRequest::where('status', ProcurementRequest::STATUS_APROVADO_COMPRAS)->count(),
+            'denied' => ProcurementRequest::where('status', ProcurementRequest::STATUS_REJEITADO)->count(),
         ];
 
         return view('gabinete.dashboard', compact('requests', 'secretarias', 'stats'));
@@ -40,18 +40,26 @@ class DashboardController extends Controller
     public function approve($id)
     {
         $procurementRequest = ProcurementRequest::findOrFail($id);
-        $procurementRequest->status = ProcurementRequest::STATUS_APROVADO_GABINETE;
+        $procurementRequest->status = ProcurementRequest::STATUS_APROVADO_COMPRAS;
         $procurementRequest->save();
 
         return redirect()->back()->with('success', 'Solicitação aprovada e encaminhada ao Compras!');
     }
 
-    public function deny($id)
+    public function deny(Request $request, $id)
     {
         $procurementRequest = ProcurementRequest::findOrFail($id);
-        $procurementRequest->status = ProcurementRequest::STATUS_NEGADO_GABINETE;
+        $procurementRequest->status = ProcurementRequest::STATUS_REJEITADO;
+        
+        // Save justification in metadata if provided
+        if ($request->has('justification')) {
+            $metadata = $procurementRequest->metadata ?? [];
+            $metadata['rejection_justification'] = $request->justification;
+            $procurementRequest->metadata = $metadata;
+        }
+
         $procurementRequest->save();
 
-        return redirect()->back()->with('success', 'Solicitação negada com sucesso.');
+        return redirect()->back()->with('success', 'Solicitação rejeitada com sucesso.');
     }
 }

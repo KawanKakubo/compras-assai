@@ -477,7 +477,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="alert alert-info" style="margin-bottom: 24px;">
                 <i class="ph ph-info"></i>
                 <div>
-                    Você está prestes a gerar a <strong>Solicitação de Demanda</strong>, o <strong>Estudo Técnico Preliminar</strong> e o <strong>Termo de Referência</strong>.
+                    Você está prestes a gerar a <strong>Solicitação de Demanda</strong> e o <strong>Estudo Técnico Preliminar</strong>.
                 </div>
             </div>
             

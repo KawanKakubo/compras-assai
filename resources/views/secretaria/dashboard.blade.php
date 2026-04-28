@@ -7,22 +7,26 @@
 @section('content')
 <div class="stats-grid">
     <div class="card">
-        <p class="card-title">Total Enviado</p>
-        <p class="card-value">{{ $stats['total'] }}</p>
+        <p class="card-title">Rascunhos</p>
+        <p class="card-value">{{ $stats['draft'] }}</p>
     </div>
     <div class="card">
-        <p class="card-title">Em Análise (Gabinete)</p>
-        <p class="card-value">{{ $stats['pending'] }}</p>
+        <p class="card-title">Assinados</p>
+        <p class="card-value">{{ $stats['signed'] }}</p>
     </div>
     <div class="card">
-        <p class="card-title">Aprovadas</p>
-        <p class="card-value">{{ $stats['approved'] }}</p>
+        <p class="card-title">Em Análise</p>
+        <p class="card-value">{{ $stats['analysis'] }}</p>
+    </div>
+    <div class="card">
+        <p class="card-title">Devolvidos/Rejeitados</p>
+        <p class="card-value" style="color: var(--danger);">{{ $stats['returned'] }}</p>
     </div>
 </div>
 
 <div class="card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-        <h3>Últimas Solicitações</h3>
+        <h3>Solicitações da Secretaria</h3>
         <a href="{{ route('planning.module-one.create') }}" class="btn btn-primary">
             <i class="fa-solid fa-plus"></i> Nova Solicitação
         </a>
@@ -46,15 +50,27 @@
                     <td>{{ $req->title }}</td>
                     <td>{{ $req->created_at->format('d/m/Y') }}</td>
                     <td>
-                        @if($req->status === 'aguardando_gabinete')
-                            <span class="badge badge-pending">Gabinete</span>
-                        @elseif($req->status === 'aprovado_gabinete')
-                            <span class="badge badge-success">Aprovado</span>
-                        @elseif($req->status === 'negado_gabinete')
-                            <span class="badge badge-danger">Negado</span>
-                        @else
-                            <span class="badge">{{ $req->status }}</span>
-                        @endif
+                        @php
+                            $statusClasses = [
+                                'rascunho' => 'badge-secondary',
+                                'assinado' => 'badge-info',
+                                'em_analise' => 'badge-pending',
+                                'aprovado_compras' => 'badge-success',
+                                'rejeitado' => 'badge-danger',
+                                'devolvido' => 'badge-warning',
+                            ];
+                            $statusLabels = [
+                                'rascunho' => 'Rascunho',
+                                'assinado' => 'Assinado',
+                                'em_analise' => 'Em Análise',
+                                'aprovado_compras' => 'Aprovado',
+                                'rejeitado' => 'Rejeitado',
+                                'devolvido' => 'Devolvido',
+                            ];
+                        @endphp
+                        <span class="badge {{ $statusClasses[$req->status] ?? 'badge-secondary' }}">
+                            {{ $statusLabels[$req->status] ?? ucfirst(str_replace('_', ' ', $req->status)) }}
+                        </span>
                     </td>
                     <td>
                         <a href="{{ route('planning.module-one.show', $req->id) }}" class="nav-link" style="padding: 0.5rem; display: inline-flex;">

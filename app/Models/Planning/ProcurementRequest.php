@@ -11,10 +11,32 @@ class ProcurementRequest extends Model
     use HasFactory;
 
     public const STATUS_RASCUNHO = 'rascunho';
-    public const STATUS_AGUARDANDO_GABINETE = 'aguardando_gabinete';
-    public const STATUS_APROVADO_GABINETE = 'aprovado_gabinete';
-    public const STATUS_NEGADO_GABINETE = 'negado_gabinete';
+    public const STATUS_ASSINADO = 'assinado';
+    public const STATUS_EM_ANALISE = 'em_analise';
+    public const STATUS_APROVADO_COMPRAS = 'aprovado_compras';
+    public const STATUS_REJEITADO = 'rejeitado';
+    public const STATUS_DEVOLVIDO = 'devolvido';
     public const STATUS_FINALIZADO = 'finalizado';
+
+    public function canBeSigned(): bool
+    {
+        return $this->status === self::STATUS_RASCUNHO;
+    }
+
+    public function canBeSubmitted(): bool
+    {
+        return $this->status === self::STATUS_ASSINADO;
+    }
+
+    public function canBeEvaluatedByGabinete(): bool
+    {
+        return $this->status === self::STATUS_EM_ANALISE;
+    }
+
+    public function canBeProcessedByCompras(): bool
+    {
+        return $this->status === self::STATUS_APROVADO_COMPRAS;
+    }
 
     public function user()
     {

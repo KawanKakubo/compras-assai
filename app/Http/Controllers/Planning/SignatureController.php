@@ -98,11 +98,15 @@ class SignatureController extends Controller
             $path = 'signatures/' . $procurementRequest->reference_code . '_signed.pdf';
             Storage::put('public/' . $path, $result['pdf_content']);
 
+            $procurementRequest->status = ProcurementRequest::STATUS_ASSINADO;
+            $procurementRequest->signed_at = now();
+            $procurementRequest->signed_file_path = $path;
+            $procurementRequest->save();
+
             $procurementRequest->update([
                 'signed_at' => now(),
                 'signature_hash' => $result['hash'],
                 'signed_file_path' => $path,
-                'status' => 'aguardando_gabinete' // ou próximo estado do fluxo
             ]);
 
             return response()->json([

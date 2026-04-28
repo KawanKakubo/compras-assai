@@ -43,8 +43,12 @@ class LoginController extends Controller
             return redirect()->intended('/gabinete/dashboard');
         } elseif ($user->isCompras()) {
             return redirect()->intended('/compras/dashboard');
-        } else {
+        } elseif ($user->isSecretaria()) {
             return redirect()->intended('/secretaria/dashboard');
+        } else {
+            // Se o cargo for inválido ou antigo (ex: 'secretaria'), desloga e volta pro login
+            Auth::logout();
+            return redirect()->route('login')->with('error', 'Seu perfil de acesso está desatualizado. Por favor, entre em contato com o administrador.');
         }
     }
 

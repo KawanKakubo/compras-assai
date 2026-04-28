@@ -12,15 +12,28 @@ class DashboardController extends Controller
     public function dashboard()
     {
         $user = Auth::user();
-        $requests = ProcurementRequest::where('user_id', $user->id)
-            ->latest()
-            ->get();
+        
+        // Se for um usuário de secretaria, ele vê todas as solicitações daquela secretaria
+        // assumindo que 'secretaria_acronym' ou 'secretaria_name' define o grupo.
+        $query = ProcurementRequest::query();
+        
+        if ($user->secretaria_acronym) {
+            $query->whereHas('user', function($q) use ($user) {
+                $q->where('secretaria_acronym', $user->secretaria_acronym);
+            });
+        } else {
+            $query->where('user_id', $user->id);
+        }
+
+        $requests = $query->latest()->get();
 
         $stats = [
             'total' => $requests->count(),
-            'pending' => $requests->where('status', ProcurementRequest::STATUS_AGUARDANDO_GABINETE)->count(),
-            'approved' => $requests->where('status', ProcurementRequest::STATUS_APROVADO_GABINETE)->count(),
-            'denied' => $requests->where('status', ProcurementRequest::STATUS_NEGADO_GABINETE)->count(),
+            'draft' => $requests->where('status', ProcurementRequest::STATUS_RASCUNHO)->count(),
+            'signed' => $requests->where('status', ProcurementRequest::STATUS_ASSINADO)->count(),
+            'analysis' => $requests->where('status', ProcurementRequest::STATUS_EM_ANALISE)->count(),
+            'approved' => $requests->where('status', ProcurementRequest::STATUS_APROVADO_COMPRAS)->count(),
+            'returned' => $requests->whereIn('status', [ProcurementRequest::STATUS_REJEITADO, ProcurementRequest::STATUS_DEVOLVIDO])->count(),
         ];
 
         return view('secretaria.dashboard', compact('requests', 'stats'));
