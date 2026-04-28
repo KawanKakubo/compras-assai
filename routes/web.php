@@ -50,6 +50,10 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/planejamento/modulo-1/{procurementRequest}/sd', [ModuleOneController::class, 'downloadSd'])->name('planning.module-one.download-sd');
     Route::get('/planejamento/modulo-1/{procurementRequest}/etp', [ModuleOneController::class, 'downloadEtp'])->name('planning.module-one.download-etp');
     Route::get('/planejamento/modulo-1/{procurementRequest}/tr', [ModuleOneController::class, 'downloadTr'])->name('planning.module-one.download-tr');
+
+    // Digital Signature
+    Route::post('/planejamento/modulo-1/{procurementRequest}/signature/request-mfa', [\App\Http\Controllers\Planning\SignatureController::class, 'requestMfa'])->name('planning.signature.request-mfa');
+    Route::post('/planejamento/modulo-1/{procurementRequest}/signature/sign', [\App\Http\Controllers\Planning\SignatureController::class, 'sign'])->name('planning.signature.sign');
 });
 
 Route::prefix('api/compras-gov')->controller(ComprasGovLookupController::class)->group(function (): void {

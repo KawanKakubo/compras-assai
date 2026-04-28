@@ -49,6 +49,9 @@ class ProcurementRequest extends Model
         'responsible_role',
         'status',
         'metadata',
+        'signed_at',
+        'signature_hash',
+        'signed_file_path',
     ];
 
     protected function casts(): array
