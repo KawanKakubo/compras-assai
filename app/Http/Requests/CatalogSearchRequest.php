@@ -11,6 +11,24 @@ class CatalogSearchRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $statusFields = [
+            'statusItem', 'statusGrupo', 'statusClasse', 'statusPdm',
+            'statusSecao', 'statusDivisao', 'statusSubclasse', 'statusServico',
+            'statusUnidadeFornecimentoPdm', 'statusUnidadeMedida',
+            'exclusivoCentralCompras', 'bps'
+        ];
+
+        foreach ($statusFields as $field) {
+            if ($this->has($field)) {
+                $value = $this->input($field);
+                if ($value === 'true') $this->merge([$field => true]);
+                if ($value === 'false') $this->merge([$field => false]);
+            }
+        }
+    }
+
     public function rules(): array
     {
         return [
@@ -20,7 +38,7 @@ class CatalogSearchRequest extends FormRequest
             'codigoGrupo' => ['nullable', 'integer', 'min:1'],
             'codigoClasse' => ['nullable', 'integer', 'min:1'],
             'codigoPdm' => ['nullable', 'integer', 'min:1'],
-            'codigoSecao' => ['nullable', 'integer', 'min:1'],
+            'codigoSecao' => ['nullable', 'string', 'max:10'],
             'codigoDivisao' => ['nullable', 'integer', 'min:1'],
             'codigoSubclasse' => ['nullable', 'integer', 'min:1'],
             'codigoCpc' => ['nullable', 'integer', 'min:1'],

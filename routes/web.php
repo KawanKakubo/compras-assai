@@ -62,11 +62,24 @@ Route::middleware(['auth'])->group(function () {
 });
 
 Route::prefix('api/compras-gov')->controller(ComprasGovLookupController::class)->group(function (): void {
+    // Materiais
+    Route::get('/material/groups', 'materialGroups');
+    Route::get('/material/classes', 'materialClasses');
+    Route::get('/material/pdms', 'materialPdms');
     Route::get('/material/items', 'materialItems');
     Route::get('/material/units', 'materialUnits');
     Route::get('/material/characteristics', 'materialCharacteristics');
+    
+    // Serviços
+    Route::get('/service/sections', 'serviceSections');
+    Route::get('/service/divisions', 'serviceDivisions');
+    Route::get('/service/groups', 'serviceGroups');
+    Route::get('/service/classes', 'serviceClasses');
+    Route::get('/service/subclasses', 'serviceSubclasses');
     Route::get('/service/items', 'serviceItems');
     Route::get('/service/units', 'serviceUnits');
+    
+    // Preços e UASG
     Route::get('/material/prices', 'materialPrices');
     Route::get('/service/prices', 'servicePrices');
     Route::get('/uasg', 'uasg');

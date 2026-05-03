@@ -203,15 +203,74 @@ class PriceResearchService
 
     public function materialPrices(array $query = []): array
     {
-        $itemCode = $query['codigoItemCatalogo'] ?? 1000;
+        $itemCode = (int) ($query['codigoItemCatalogo'] ?? 0);
         $descricao = $query['descricao'] ?? '';
-        return $this->generateHybridPriceData((int)$itemCode, $descricao, false);
+
+        if ($itemCode > 0) {
+            // 1. Tenta a API Oficial de Preços Praticados (Dados Abertos)
+            // Filtramos por PR (Paraná) para ser mais relevante, e pegamos o último ano
+            $apiQuery = [
+                'codigoItemCatalogo' => $itemCode,
+                'dataCompraInicio' => now()->subYear()->format('Y-m-d'),
+                'dataCompraFim' => now()->format('Y-m-d'),
+                'estado' => 'PR',
+                'tamanhoPagina' => 50
+            ];
+
+            $govResult = $this->client->get('/modulo-pesquisa-preco/1_consultarMaterial', $apiQuery);
+
+            if (!empty($govResult['resultado'])) {
+                return [
+                    'resultado' => array_map(fn($p) => [
+                        'valorUnitario' => $p['valorUnitario'],
+                        'dataCompra' => $p['dataCompra'],
+                        'orgao' => $p['nomeOrgao'] ?? 'Órgão Público',
+                        'unidadeMedida' => $p['unidadeMedida'] ?? 'UN'
+                    ], $govResult['resultado']),
+                    'totalRegistros' => $govResult['totalRegistros'] ?? count($govResult['resultado']),
+                    'fonte' => 'Dados Abertos: Preços Praticados (CATMAT)',
+                    'nivel' => 1
+                ];
+            }
+        }
+
+        // 2. Fallback para Mineração PNCP ou Heurística
+        return $this->generateHybridPriceData($itemCode, $descricao, false);
     }
 
     public function servicePrices(array $query = []): array
     {
-        $serviceCode = $query['codigoServico'] ?? 2000;
+        $serviceCode = (int) ($query['codigoServico'] ?? 0);
         $descricao = $query['descricao'] ?? '';
-        return $this->generateHybridPriceData((int)$serviceCode, $descricao, true);
+
+        if ($serviceCode > 0) {
+            // 1. Tenta a API Oficial de Preços Praticados (Dados Abertos)
+            $apiQuery = [
+                'codigoItemCatalogo' => $serviceCode,
+                'dataCompraInicio' => now()->subYear()->format('Y-m-d'),
+                'dataCompraFim' => now()->format('Y-m-d'),
+                'estado' => 'PR',
+                'tamanhoPagina' => 50
+            ];
+
+            $govResult = $this->client->get('/modulo-pesquisa-preco/3_consultarServico', $apiQuery);
+
+            if (!empty($govResult['resultado'])) {
+                return [
+                    'resultado' => array_map(fn($p) => [
+                        'valorUnitarioHomologado' => $p['valorUnitario'],
+                        'dataCompra' => $p['dataCompra'],
+                        'orgao' => $p['nomeOrgao'] ?? 'Órgão Público',
+                        'unidadeMedida' => $p['unidadeMedida'] ?? 'SV'
+                    ], $govResult['resultado']),
+                    'totalRegistros' => $govResult['totalRegistros'] ?? count($govResult['resultado']),
+                    'fonte' => 'Dados Abertos: Preços Praticados (CATSER)',
+                    'nivel' => 1
+                ];
+            }
+        }
+
+        // 2. Fallback para Mineração PNCP ou Heurística
+        return $this->generateHybridPriceData($serviceCode, $descricao, true);
     }
 }

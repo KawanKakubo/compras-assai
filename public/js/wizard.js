@@ -175,22 +175,31 @@ document.addEventListener('DOMContentLoaded', () => {
             <input type="hidden" name="items[${index}][price_max]" class="item-price-max">
             <input type="hidden" name="items[${index}][price_sample_count]" class="item-price-sample">
 
-            <div class="form-row" style="grid-template-columns: 2fr 1fr;">
-                <div class="form-group search-container">
-                    <label>Busca CATMAT/CATSER (Automática) *</label>
-                    <input type="text" class="item-search-input" placeholder="Digite para buscar..." required autocomplete="off">
-                    <div class="search-results"></div>
+            <div class="hierarchy-navigation">
+                <div class="hierarchy-step" data-level="0">
+                    <label><i class="ph ph-list-numbers"></i> Selecione o ${isMaterial ? 'Grupo' : 'Seção'}</label>
+                    <select class="hierarchy-select" data-level="0">
+                        <option value="">Carregando opções...</option>
+                    </select>
                 </div>
+                <div class="hierarchy-steps-container"></div>
+                <div class="item-selection-container" style="display:none">
+                    <label><i class="ph ph-package"></i> Selecione o Item Final</label>
+                    <div class="item-selection-list"></div>
+                </div>
+            </div>
+
+            <div class="form-row" style="grid-template-columns: 1fr;">
                 <div class="form-group">
                     <label>Código do Catálogo</label>
-                    <input type="text" name="items[${index}][catalog_code]" class="item-catalog-code" readonly>
+                    <input type="text" name="items[${index}][catalog_code]" class="item-catalog-code" readonly placeholder="Selecionado via catálogo">
                 </div>
             </div>
 
             <div class="form-row-3">
                 <div class="form-group" style="grid-column: span 3;">
                     <label>Descrição Detalhada *</label>
-                    <textarea name="items[${index}][description]" class="item-description" required rows="2" placeholder="Ex: Caneta esferográfica azul, ponta 1.0mm..."></textarea>
+                    <textarea name="items[${index}][description]" class="item-description" required rows="2" placeholder="A descrição será preenchida automaticamente ao selecionar o item..."></textarea>
                 </div>
                 <div class="form-group">
                     <label>Unidade *</label>
@@ -219,6 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         itemsContainer.appendChild(card);
         setupItemCardListeners(card, index, type);
+        setupHierarchyNavigation(card, type);
     }
     
     function setupItemCardListeners(card, index, type) {
@@ -242,85 +252,199 @@ document.addEventListener('DOMContentLoaded', () => {
         
         qtyInput.addEventListener('input', calcTotal);
         valInput.addEventListener('input', calcTotal);
+    }
+
+    async function setupHierarchyNavigation(card, type) {
+        const initialSelect = card.querySelector('.hierarchy-select[data-level="0"]');
+        const stepsContainer = card.querySelector('.hierarchy-steps-container');
+        const itemContainer = card.querySelector('.item-selection-container');
+        const itemList = card.querySelector('.item-selection-list');
+
+        // Load initial level (Group or Section)
+        const isMaterial = type === 'material';
+        const endpoint = isMaterial ? '/api/compras-gov/material/groups' : '/api/compras-gov/service/sections';
         
-        // CATMAT/CATSER Search Logic
-        const searchInput = card.querySelector('.item-search-input');
-        const resultsContainer = card.querySelector('.search-results');
-        let searchTimeout;
-        
-        searchInput.addEventListener('input', (e) => {
-            const term = e.target.value.trim();
-            clearTimeout(searchTimeout);
-            
-            if (term.length < 3) {
-                resultsContainer.classList.remove('show');
+        try {
+            const response = await fetch(endpoint);
+            const data = await response.json();
+            const results = data.resultado || [];
+
+            initialSelect.innerHTML = '<option value="">Selecione...</option>';
+            results.forEach(item => {
+                const opt = document.createElement('option');
+                opt.value = isMaterial ? item.codigoGrupo : item.codigoSecao;
+                opt.textContent = `${opt.value} - ${isMaterial ? item.nomeGrupo : item.nomeSecao}`;
+                initialSelect.appendChild(opt);
+            });
+
+            initialSelect.addEventListener('change', () => {
+                stepsContainer.innerHTML = '';
+                itemContainer.style.display = 'none';
+                if (initialSelect.value) {
+                    loadNextLevel(card, type, 1, initialSelect.value, stepsContainer, itemContainer, itemList);
+                }
+            });
+        } catch (error) {
+            initialSelect.innerHTML = '<option value="">Erro ao carregar</option>';
+        }
+    }
+
+    async function loadNextLevel(card, type, level, parentCode, container, itemContainer, itemList) {
+        const isMaterial = type === 'material';
+        let endpoint = '';
+        let label = '';
+        let nextLevel = level + 1;
+
+        if (isMaterial) {
+            if (level === 1) { endpoint = `/api/compras-gov/material/classes?codigoGrupo=${parentCode}`; label = 'Classe'; }
+            else if (level === 2) { endpoint = `/api/compras-gov/material/pdms?codigoClasse=${parentCode}`; label = 'PDM (Padrão de Descritivo)'; }
+            else {
+                // Load final items for PDM
+                loadFinalItems(card, type, parentCode, itemContainer, itemList);
                 return;
             }
-            
-            resultsContainer.innerHTML = '<div class="search-loading"><div class="spinner"></div> Buscando catálogo...</div>';
-            resultsContainer.classList.add('show');
-            
-            searchTimeout = setTimeout(() => performSearch(term, type, resultsContainer, card), 600);
-        });
-        
-        // Hide search results when clicking outside
-        document.addEventListener('click', (e) => {
-            if (!card.querySelector('.search-container').contains(e.target)) {
-                resultsContainer.classList.remove('show');
+        } else {
+            if (level === 1) { endpoint = `/api/compras-gov/service/divisions?codigoSecao=${parentCode}`; label = 'Divisão'; }
+            else if (level === 2) { endpoint = `/api/compras-gov/service/groups?codigoDivisao=${parentCode}`; label = 'Grupo'; }
+            else if (level === 3) { endpoint = `/api/compras-gov/service/classes?codigoGrupo=${parentCode}`; label = 'Classe'; }
+            else if (level === 4) { endpoint = `/api/compras-gov/service/subclasses?codigoClasse=${parentCode}`; label = 'Subclasse'; }
+            else {
+                // Load final items for Subclass
+                loadFinalItems(card, type, parentCode, itemContainer, itemList);
+                return;
             }
-        });
-    }
-    
-    async function performSearch(term, type, resultsContainer, card) {
+        }
+
+        const stepDiv = document.createElement('div');
+        stepDiv.className = 'hierarchy-step';
+        stepDiv.dataset.level = level;
+        stepDiv.innerHTML = `
+            <label><i class="ph ph-caret-right"></i> Selecione a ${label}</label>
+            <select class="hierarchy-select">
+                <option value="">Carregando...</option>
+            </select>
+        `;
+        container.appendChild(stepDiv);
+
+        const select = stepDiv.querySelector('select');
+
         try {
-            const endpoint = type === 'material' ? '/api/compras-gov/material/items' : '/api/compras-gov/service/items';
-            const queryParam = type === 'material' ? 'descricaoItem' : 'descricaoServico';
+            const response = await fetch(endpoint, {
+                headers: { 'Accept': 'application/json' }
+            });
             
-            const response = await fetch(`${endpoint}?${queryParam}=${encodeURIComponent(term)}&tamanhoPagina=10`);
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                select.innerHTML = `<option value="">Erro: ${errorData.message || 'Falha no servidor'}</option>`;
+                return;
+            }
+
             const data = await response.json();
             
-            if (data.error || !data.resultado || data.resultado.length === 0) {
-                resultsContainer.innerHTML = '<div class="search-loading">Nenhum item encontrado.</div>';
+            if (data.error) {
+                select.innerHTML = `<option value="">Erro: ${data.error}</option>`;
                 return;
             }
-            
-            renderSearchResults(data.resultado, type, resultsContainer, card);
+
+            const results = data.resultado || [];
+
+            select.innerHTML = '<option value="">Selecione...</option>';
+            results.forEach(item => {
+                const opt = document.createElement('option');
+                if (isMaterial) {
+                    opt.value = level === 1 ? item.codigoClasse : item.codigoPdm;
+                    opt.textContent = `${opt.value} - ${level === 1 ? item.nomeClasse : item.nomePdm}`;
+                } else {
+                    const fields = ['codigoDivisao', 'codigoGrupo', 'codigoClasse', 'codigoSubclasse'];
+                    const names = ['nomeDivisao', 'nomeGrupo', 'nomeClasse', 'nomeSubclasse'];
+                    opt.value = item[fields[level-1]];
+                    opt.textContent = `${opt.value} - ${item[names[level-1]]}`;
+                }
+                select.appendChild(opt);
+            });
+
+            select.addEventListener('change', () => {
+                // Remove subsequent steps
+                while (stepDiv.nextElementSibling) {
+                    stepDiv.nextElementSibling.remove();
+                }
+                itemContainer.style.display = 'none';
+                
+                if (select.value) {
+                    loadNextLevel(card, type, nextLevel, select.value, container, itemContainer, itemList);
+                }
+            });
         } catch (error) {
-            resultsContainer.innerHTML = '<div class="search-loading">Erro na busca. Verifique a conexão.</div>';
+            select.innerHTML = '<option value="">Erro na conexão com o servidor</option>';
+            console.error('Taxonomy Error:', error);
+        }
+    }
+
+    async function loadFinalItems(card, type, parentCode, itemContainer, itemList) {
+        const isMaterial = type === 'material';
+        const endpoint = isMaterial 
+            ? `/api/compras-gov/material/items?codigoPdm=${parentCode}&statusItem=true&tamanhoPagina=50`
+            : `/api/compras-gov/service/items?codigoSubclasse=${parentCode}&statusServico=true&tamanhoPagina=50`;
+
+        itemContainer.style.display = 'block';
+        itemList.innerHTML = '<div class="search-loading"><div class="spinner"></div> Carregando itens finais...</div>';
+
+        try {
+            const response = await fetch(endpoint, {
+                headers: { 'Accept': 'application/json' }
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                itemList.innerHTML = `<div class="search-loading" style="color:var(--danger)">Erro: ${errorData.message || 'Falha no servidor'}</div>`;
+                return;
+            }
+
+            const data = await response.json();
+
+            if (data.error) {
+                itemList.innerHTML = `<div class="search-loading" style="color:var(--danger)">Erro: ${data.error}</div>`;
+                return;
+            }
+
+            const results = data.resultado || [];
+
+            if (results.length === 0) {
+                itemList.innerHTML = '<div class="search-loading">Nenhum item ativo encontrado nesta categoria.</div>';
+                return;
+            }
+
+            itemList.innerHTML = '';
+            results.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'item-selection-option';
+                const code = isMaterial ? item.codigoItem : item.codigoServico;
+                const name = isMaterial ? item.descricaoItem : (item.nomeServico || item.descricaoServico);
+                
+                div.innerHTML = `
+                    <span class="item-code">${code}</span>
+                    <span class="item-name">${name}</span>
+                `;
+                
+                div.addEventListener('click', () => {
+                    selectItemFromCatalog(item, type, card);
+                    // Visual feedback
+                    itemList.querySelectorAll('.item-selection-option').forEach(el => el.style.background = '');
+                    div.style.background = 'var(--accent-glow)';
+                });
+                itemList.appendChild(div);
+            });
+        } catch (error) {
+            itemList.innerHTML = '<div class="search-loading" style="color:var(--danger)">Erro na conexão com o servidor.</div>';
         }
     }
     
-    function renderSearchResults(results, type, resultsContainer, card) {
-        resultsContainer.innerHTML = '';
-        
-        results.forEach(item => {
-            const isMaterial = type === 'material';
-            const code = isMaterial ? item.codigoItem : item.codigoServico;
-            // A API v3 retorna 'descricaoItem' para material, mas 'nomeServico' para serviços!
-            const desc = isMaterial ? item.descricaoItem : (item.nomeServico || item.descricaoServico);
-            
-            const div = document.createElement('div');
-            div.className = 'search-result-item';
-            div.innerHTML = `
-                <div class="result-code">${code} ${item.itemSustentavel ? '<span style="color:#10b981">🌱 Sustentável</span>' : ''}</div>
-                <div class="result-desc">${desc}</div>
-                <div class="result-meta">
-                    ${isMaterial && item.nomeClasse ? `Classe: ${item.nomeClasse}` : (item.nomeClasse ? `Classe: ${item.nomeClasse}` : '')}
-                </div>
-            `;
-            
-            div.addEventListener('click', () => selectItemFromCatalog(item, type, card, resultsContainer));
-            resultsContainer.appendChild(div);
-        });
-    }
-    
-    async function selectItemFromCatalog(item, type, card, resultsContainer) {
+    async function selectItemFromCatalog(item, type, card) {
         const isMaterial = type === 'material';
         const code = isMaterial ? item.codigoItem : item.codigoServico;
         const desc = isMaterial ? item.descricaoItem : (item.nomeServico || item.descricaoServico);
         
         // Populate fields
-        card.querySelector('.item-search-input').value = desc;
         card.querySelector('.item-catalog-code').value = code;
         card.querySelector('.item-description').value = desc;
         card.querySelector('.item-sustainable').value = item.itemSustentavel ? 1 : 0;
@@ -341,8 +465,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             card.querySelector('.item-unit').value = "SV"; // Serviço padrão
         }
-        
-        resultsContainer.classList.remove('show');
         
         // Automatically trigger price research
         fetchPricesForItem(code, type, card);

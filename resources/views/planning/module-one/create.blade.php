@@ -213,20 +213,30 @@
              STEP 3: ITENS CATMAT
              ========================================================= -->
         <div class="wizard-step" id="step-3">
-            <h2 class="step-title">Itens e Catálogo</h2>
-            <p class="step-subtitle">Adicione os itens. A busca no CATMAT/CATSER e a pesquisa de preços básica são automáticas.</p>
+            <h2 class="step-title">Seleção de Itens (CATMAT/CATSER)</h2>
+            <p class="step-subtitle">Como você deseja adicionar os itens à sua demanda?</p>
+
+            <div class="alert alert-info" style="margin-bottom: 24px;">
+                <i class="ph ph-info" style="font-size: 1.5rem"></i>
+                <div>
+                    <strong>Dica de Precisão:</strong> O uso da <strong>Navegação por Grupos</strong> (Explorar Catálogo) é altamente recomendado para garantir que você selecione o código exato da Lei 14.133/2021, facilitando a aceitação do DFD pelo Gabinete.
+                </div>
+            </div>
 
             <div id="items-container">
                 <!-- Javascript will render item cards here -->
             </div>
 
-            <div style="margin-top: 16px; display: flex; gap: 12px;">
-                <button type="button" class="btn btn-secondary" id="btn-add-item">
-                    <i class="ph ph-plus"></i> Adicionar Material (CATMAT)
-                </button>
-                <button type="button" class="btn btn-secondary" id="btn-add-service">
-                    <i class="ph ph-plus"></i> Adicionar Serviço (CATSER)
-                </button>
+            <div style="margin-top: 16px; display: flex; flex-direction: column; gap: 12px; border: 1px dashed var(--border); padding: 20px; border-radius: var(--radius); background: rgba(255,255,255,0.02);">
+                <div style="text-align: center; color: var(--text-muted); font-size: 0.8rem; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.1em;">Adicionar Novo Item</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <button type="button" class="btn btn-secondary" id="btn-add-item" style="justify-content: center; background: var(--bg-card);">
+                        <i class="ph ph-package"></i> Adicionar Material
+                    </button>
+                    <button type="button" class="btn btn-secondary" id="btn-add-service" style="justify-content: center; background: var(--bg-card);">
+                        <i class="ph ph-wrench"></i> Adicionar Serviço
+                    </button>
+                </div>
             </div>
         </div>
 

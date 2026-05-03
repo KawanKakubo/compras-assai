@@ -24,10 +24,6 @@ class DocumentTemplateService
                 '{{referencia}}' => $request->reference_code,
                 '{{objeto}}' => $request->object_summary,
                 '{{justificativa}}' => $request->need_justification,
-                '{{assinatura_autor}}' => ($request->requester_name ?? 'Não informado') . "\nCPF: " . ($request->requester_cpf ?? '') . "\nCargo: " . ($request->requester_role ?? ''),
-                '{{assinatura_secretario}}' => ($request->responsible_name ?? 'Não informado') . "\nCPF: " . ($request->responsible_cpf ?? '') . "\nCargo: " . ($request->responsible_role ?? ''),
-                
-                // Specific signature keys for the Python script
                 'NOME:_autor' => ($request->requester_name ?? 'Não informado'),
                 'CPF:_autor' => ($request->requester_cpf ?? ''),
                 'CARGO/FUNÇÃO:_autor' => ($request->requester_role ?? ''),
@@ -44,12 +40,13 @@ class DocumentTemplateService
                 'Descrição sucinta do objeto' => $request->object_summary,
                 'Grau de prioridade da compra ou contratação' => $request->priority_level === 'high' ? 'Alta' : ($request->priority_level === 'medium' ? 'Média' : 'Baixa'),
                 'Justificativa da necessidade da contratação' => $request->need_justification,
-                'Indicação de vinculação ou dependência' => $request->linked_request ?? 'Não se aplica',
+                'Indicação de vinculação ou dependência com objeto de outro documento de formalização de demanda' => $request->linked_request ?? 'Não se aplica',
                 'IMPACTOS AMBIENTAIS' => $request->environmental_impacts ?? 'Não foram identificados impactos significativos.',
                 'LOGISTICA REVERSA' => $request->reverse_logistics ?? 'Não se aplica.',
                 'Aplica:' => $request->municipal_policy_applies ? 'Sim' : 'Não',
                 'justificativa para a aplicação' => $request->municipal_policy_justification ?? 'Não se aplica.',
                 'Requisitante (Unidade/Setor/Depto)' => $request->requisition_unit ?? $secName,
+                'Programa Compras ____?' => $request->studies->first()?->municipal_program_eligible ? 'Sim' : 'Não',
             ],
             'items' => $request->items->map(fn($item) => [
                 'description' => $item->description,
@@ -73,11 +70,11 @@ class DocumentTemplateService
 
         $study = $request->studies->first();
         
-        $viability = "A contratação é considerada VIÁVEL.";
+        $viability = "Viável";
         if ($study?->viability_decision === 'not_viable') {
-            $viability = "A contratação é considerada INVIÁVEL. " . ($study->viability_justification ?: '');
+            $viability = "Inviável";
         } elseif ($study?->viability_decision === 'viable_with_restrictions') {
-            $viability = "A contratação é considerada VIÁVEL COM RESTRIÇÕES. " . ($study->viability_justification ?: '');
+            $viability = "Viável com restrições";
         }
 
         $data = [
@@ -86,34 +83,27 @@ class DocumentTemplateService
                 'Motivação/Justificativa' => $study?->motivation ?: $request->need_justification,
                 'Está prevista no Plano de Contratações Anual (PCA)?' => $study?->is_in_pca ? 'Sim' : 'Não',
                 'Referência PCA:' => $study?->pca_reference ?: 'Não se aplica',
-                'Descrição da demonstração:' => $study?->pca_demonstration ?: 'Não se aplica',
-                'ÁREA REQUISITANTE' => $request->requisition_unit ?? 'Secretaria Solicitante',
-                'Justificativa da Necessidade da Contratação' => $study?->need_justification ?: $request->need_justification,
+                'Descrição da demonstração:' => $study?->pca_description ?: ($study?->pca_demonstration ?: 'Não se aplica'),
+                'Identificação da Área requisitante' => $request->requisition_unit ?? $request->secretaria,
+                'Justificativa da Necessidade da Contratação' => $study?->need_description ?: $request->need_justification,
                 'Providências Prévias ao Contrato' => $study?->prerequisites ?: 'Não se aplica.',
-                'Contratações Correlataras' => $study?->linked_contracts ?: 'Não foram identificadas contratações correlatas.',
+                'Contratações Correlataras e/ou Interdependentes' => $study?->correlated_contracts ?: ($study?->linked_contracts ?: 'Não foram identificadas contratações correlatas.'),
                 'Requisitos Necessários à Solução' => $study?->solution_requirements ?: 'Não foram identificados requisitos específicos.',
-                'Análise dos Possíveis Impactos' => $study?->environmental_impacts ?: ($request->has_environmental_impact ? $request->environmental_impacts : 'Não foram identificados impactos significativos.'),
-                'Levantamento de Soluções' => $study?->solution_survey ?: 'A solução proposta foi baseada na necessidade direta da secretaria.',
-                'Registro de Soluções Consideradas Inviáveis' => $study?->unviable_solutions ?: 'Não foram identificadas soluções inviáveis relevantes.',
-                'Justificativa para o Parcelamento' => $study?->splitting_justification ?: 'O objeto não será parcelado visando a economia de escala.',
-                'Descrição da Solução a ser Contratada' => $study?->solution_description ?: $request->object_summary,
-                'Estimativa de Custo Total' => 'Conforme tabela de itens anexa ao processo.',
-                'Demonstrativos dos Resultados Pretendidos' => $study?->intended_results ?: 'Atendimento imediato da demanda para continuidade do serviço público.',
-                'Análise de Viabilidade da Contratação' => $viability,
+                'Análise dos Possíveis Impactos Ambientes e Logística Reversa' => $study?->environmental_analysis ?: ($request->environmental_impacts ?: 'Não foram identificados impactos significativos.'),
+                'Levantamento de Soluções' => $study?->solution_mapping ?: ($study?->solution_survey ?: 'A solução proposta foi baseada na necessidade direta da secretaria.'),
+                'Registro de Soluções Consideradas Inviáveis' => $study?->discarded_solutions ?: ($study?->unviable_solutions ?: 'Não foram identificadas soluções inviáveis relevantes.'),
+                'Justificativa para o Parcelamento ou Não da Contratação' => $study?->parceling_justification ?: ($study?->splitting_justification ?: 'O objeto não será parcelado visando a economia de escala.'),
+                'Descrição da Solução a ser Contratada' => $study?->chosen_solution ?: ($study?->solution_description ?: $request->object_summary),
+                'Estimativa de Custo Total da Contratação' => 'Conforme tabela de itens gerada abaixo.',
+                'Demonstrativos dos Resultados Pretendidos' => $study?->expected_results ?: ($study?->intended_results ?: 'Atendimento imediato da demanda para continuidade do serviço público.'),
+                'Análise de Viabilidade da Contratação' => $study?->viability_analysis ?: "A contratação é considerada $viability.",
+                'Viabilidade' => $viability,
+                'Justificativa' => $study?->viability_justification ?: 'A demanda atende aos requisitos técnicos e econômicos do órgão.',
                 'Nome do responsável' => $request->requester_name ?? 'Não informado',
-                'memória de cálculo' => $request->demand_memory_calculation ?: 'Calculado com base na demanda histórica.',
-                'levantamento de mercado' => $study?->solution_mapping ?: 'Identificado soluções padrão de mercado.',
-                'alternativas e justificativa' => $study?->discarded_solutions ?: 'Não foram identificadas soluções alternativas superiores.',
-                'estimativa do valor' => $study?->estimated_total_cost ? 'R$ ' . number_format($study->estimated_total_cost, 2, ',', '.') : 'R$ ' . number_format($request->items->sum('total_value'), 2, ',', '.'),
-                'descrição da solução como um todo' => $study?->chosen_solution ?: $request->title,
+                'Estimativa da Demanda' => 'Abaixo segue a relação detalhada dos itens e quantidades estimadas:',
+                'Programa de Compras – Levantamento de Soluções' => $study?->municipal_program_eligible ? "Item enquadrado no Programa Municipal de Compras para fomento local." : "Não se aplica.",
             ],
             'placeholders' => [
-                '{{descricao_necessidade}}' => $study?->need_description ?: $request->need_justification,
-                '{{previsao_pca}}' => $study?->is_in_pca ? 'Sim. ' . $study->pca_reference : 'Não consta no PCA vigente.',
-                '{{providencias_previas}}' => $study?->prerequisites ?: 'Não foram identificadas providências prévias necessárias.',
-                '{{declaracao_viabilidade}}' => $viability,
-                
-                // Specific signature keys for the Python script
                 'NOME:_autor' => ($request->requester_name ?? 'Não informado'),
                 'CPF:_autor' => ($request->requester_cpf ?? ''),
                 'CARGO/FUNÇÃO:_autor' => ($request->requester_role ?? ''),
@@ -125,6 +115,7 @@ class DocumentTemplateService
                 '___ANO___' => date('Y'),
                 '___DATA_HOJE___' => date('d/m/Y'),
                 '___OBJETO_TITULO___' => $request->title,
+                '{{declaracao_viabilidade}}' => "A contratação é considerada $viability.",
             ],
             'items' => $request->items->map(fn($item) => [
                 'description' => $item->description,
