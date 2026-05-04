@@ -17,9 +17,18 @@ class ComprasGovApiClient
     {
         $cacheKey = 'compras_gov:' . md5($path . serialize($query));
 
-        return Cache::remember($cacheKey, now()->addHour(), function () use ($path, $query, $cacheKey): array {
-            return $this->fetchFromApi($path, $query, $cacheKey);
-        });
+        $data = Cache::get($cacheKey);
+        if ($data && empty($data['error'])) {
+            return $data;
+        }
+
+        $result = $this->fetchFromApi($path, $query, $cacheKey);
+        
+        if (empty($result['error'])) {
+            Cache::put($cacheKey, $result, now()->addHour());
+        }
+
+        return $result;
     }
 
     /**
@@ -37,14 +46,14 @@ class ComprasGovApiClient
             return $data;
         }
 
-        // 2. Se não tem no cache, tenta buscar na API
-        $apiResult = $this->fetchFromApi($path, $query, $cacheKey, false);
+        // 2. Se não tem no cache, tenta buscar na API com timeout menor e sem retry excessivo
+        // Taxonomias devem ser rápidas; se demorar > 60s, algo está errado no Gov.
+        $apiResult = $this->fetchFromApi($path, $query, $cacheKey, false, 60, 2);
 
         // 3. Se a API falhou (tem erro), tenta o backup
         if (!empty($apiResult['error'])) {
             $backupData = Cache::get($backupKey);
             if ($backupData) {
-                // Adiciona um aviso que o dado pode estar desatualizado devido à queda do gov
                 $backupData['_stale_warning'] = true;
                 return $backupData;
             }
@@ -60,34 +69,42 @@ class ComprasGovApiClient
     /**
      * Internal method to perform the HTTP call with error handling.
      */
-    protected function fetchFromApi(string $path, array $query = [], ?string $cacheKey = null, bool $forgetOnFailure = true): array
+    protected function fetchFromApi(string $path, array $query = [], ?string $cacheKey = null, bool $forgetOnFailure = true, ?int $timeout = null, ?int $retries = null): array
     {
         try {
-            // Aumenta o timeout para buscas de itens, que podem ser pesadas
-            $timeout = str_contains($path, 'consultarItem') ? 60 : 30;
+            // Default timeouts: searches are heavy (60s), others are moderate (30s)
+            if ($timeout === null) {
+                $timeout = str_contains($path, 'consultarItem') ? 120 : 60;
+            }
             
-            $response = $this->client($timeout)
-                ->get($path, $query);
+            $request = $this->client($timeout);
+            if ($retries !== null) {
+                $request->retry($retries, 200);
+            }
+
+            $response = $request->get($path, $query);
 
             if ($response->failed()) {
                 Log::warning('ComprasGov API error', [
                     'path' => $path,
                     'query' => $query,
                     'status' => $response->status(),
-                    'body' => $response->body(),
                 ]);
 
                 $errorMessage = 'A API do Governo retornou um erro inesperado (Status ' . $response->status() . ').';
                 
-                // Se o corpo da resposta for curto e parecer uma mensagem de erro, use-o
                 $body = $response->body();
                 if (strlen($body) > 5 && strlen($body) < 200 && !str_contains($body, '<html')) {
                     $errorMessage = 'Erro do Governo: ' . trim(strip_tags($body));
                 }
 
-                // Erro 500 ou 503 geralmente indica sobrecarga/manutenção
-                if (in_array($response->status(), [500, 502, 503, 504])) {
-                    $errorMessage = 'O sistema do Governo está temporariamente instável ou em manutenção. Tente novamente em alguns instantes.';
+                if (in_array($response->status(), [500, 502, 503, 504]) || str_contains($body, 'EntityManager')) {
+                    $errorMessage = 'O sistema do Governo está temporariamente instável ou sobrecarregado (Erro JPA/EntityManager). Tentaremos novamente em instantes.';
+                    
+                    // Se for erro de EntityManager, vale a pena forçar uma pequena espera e tentar de novo se estivermos em um loop de sync
+                    if (str_contains($body, 'EntityManager') && $retries > 0) {
+                        sleep(1);
+                    }
                 }
 
                 return [
@@ -112,6 +129,8 @@ class ComprasGovApiClient
 
             if ($forgetOnFailure && $cacheKey) {
                 Cache::forget($cacheKey);
+                // Also forget the taxonomy key just in case
+                Cache::forget(str_replace('compras_gov:', 'compras_gov_tax:', $cacheKey));
             }
 
             $msg = $e->getMessage();
@@ -127,7 +146,7 @@ class ComprasGovApiClient
         }
     }
 
-    protected function client(int $timeout = 12): PendingRequest
+    protected function client(int $timeout = 15): PendingRequest
     {
         return Http::baseUrl(config('compras.api_base_url'))
             ->withHeaders([
@@ -135,7 +154,7 @@ class ComprasGovApiClient
                 'Accept' => 'application/json',
             ])
             ->timeout($timeout)
-            ->connectTimeout(8)
+            ->connectTimeout(5)
             ->retry(2, 300);
     }
 }

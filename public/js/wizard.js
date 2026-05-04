@@ -254,6 +254,35 @@ document.addEventListener('DOMContentLoaded', () => {
         valInput.addEventListener('input', calcTotal);
     }
 
+    // Simple in-memory cache for taxonomy to avoid redundant server hits
+    const taxonomyCache = new Map();
+
+    async function fetchWithCache(url) {
+        if (taxonomyCache.has(url)) {
+            return taxonomyCache.get(url);
+        }
+        
+        try {
+            const response = await fetch(url, {
+                headers: { 'Accept': 'application/json' }
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                return { error: errorData.error || errorData.message || `Erro HTTP ${response.status}` };
+            }
+            
+            const data = await response.json();
+            if (!data.error && data.resultado) {
+                taxonomyCache.set(url, data);
+            }
+            return data;
+        } catch (error) {
+            console.error('Fetch error for:', url, error);
+            throw error;
+        }
+    }
+
     async function setupHierarchyNavigation(card, type) {
         const initialSelect = card.querySelector('.hierarchy-select[data-level="0"]');
         const stepsContainer = card.querySelector('.hierarchy-steps-container');
@@ -265,15 +294,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const endpoint = isMaterial ? '/api/compras-gov/material/groups' : '/api/compras-gov/service/sections';
         
         try {
-            const response = await fetch(endpoint);
-            const data = await response.json();
+            const data = await fetchWithCache(endpoint);
+            
+            if (data.error) {
+                initialSelect.innerHTML = `<option value="">${data.error}</option>`;
+                return;
+            }
+
             const results = data.resultado || [];
 
             initialSelect.innerHTML = '<option value="">Selecione...</option>';
             results.forEach(item => {
                 const opt = document.createElement('option');
-                opt.value = isMaterial ? item.codigoGrupo : item.codigoSecao;
-                opt.textContent = `${opt.value} - ${isMaterial ? item.nomeGrupo : item.nomeSecao}`;
+                // Use normalized fields or fallback to generic ones
+                opt.value = isMaterial ? (item.codigoGrupo || item.codigo) : (item.codigoSecao || item.codigo);
+                const name = isMaterial ? (item.nomeGrupo || item.descricao || item.nome) : (item.nomeSecao || item.descricao || item.nome);
+                opt.textContent = `${opt.value} - ${name}`;
                 initialSelect.appendChild(opt);
             });
 
@@ -285,7 +321,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         } catch (error) {
-            initialSelect.innerHTML = '<option value="">Erro ao carregar</option>';
+            console.error('Initial Hierarchy Error:', error);
+            initialSelect.innerHTML = '<option value="">Erro na conexão com o servidor</option>';
         }
     }
 
@@ -329,17 +366,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const select = stepDiv.querySelector('select');
 
         try {
-            const response = await fetch(endpoint, {
-                headers: { 'Accept': 'application/json' }
-            });
-            
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                select.innerHTML = `<option value="">Erro: ${errorData.message || 'Falha no servidor'}</option>`;
-                return;
-            }
-
-            const data = await response.json();
+            const data = await fetchWithCache(endpoint);
             
             if (data.error) {
                 select.innerHTML = `<option value="">Erro: ${data.error}</option>`;
@@ -352,13 +379,13 @@ document.addEventListener('DOMContentLoaded', () => {
             results.forEach(item => {
                 const opt = document.createElement('option');
                 if (isMaterial) {
-                    opt.value = level === 1 ? item.codigoClasse : item.codigoPdm;
-                    opt.textContent = `${opt.value} - ${level === 1 ? item.nomeClasse : item.nomePdm}`;
+                    opt.value = (level === 1 ? item.codigoClasse : item.codigoPdm) || item.codigo;
+                    opt.textContent = `${opt.value} - ${(level === 1 ? item.nomeClasse : item.nomePdm) || item.descricao || item.nome}`;
                 } else {
                     const fields = ['codigoDivisao', 'codigoGrupo', 'codigoClasse', 'codigoSubclasse'];
                     const names = ['nomeDivisao', 'nomeGrupo', 'nomeClasse', 'nomeSubclasse'];
-                    opt.value = item[fields[level-1]];
-                    opt.textContent = `${opt.value} - ${item[names[level-1]]}`;
+                    opt.value = item[fields[level-1]] || item.codigo;
+                    opt.textContent = `${opt.value} - ${item[names[level-1]] || item.descricao || item.nome}`;
                 }
                 select.appendChild(opt);
             });
@@ -375,8 +402,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         } catch (error) {
-            select.innerHTML = '<option value="">Erro na conexão com o servidor</option>';
+            select.innerHTML = '<option value="">Erro na conexão. Clique para tentar novamente.</option>';
             console.error('Taxonomy Error:', error);
+            
+            // Permite tentar novamente ao clicar no select
+            const retryHandler = () => {
+                select.removeEventListener('click', retryHandler);
+                loadNextLevel(card, type, level, parentCode, container, itemContainer, itemList);
+            };
+            select.addEventListener('click', retryHandler);
         }
     }
 
@@ -396,14 +430,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
-                itemList.innerHTML = `<div class="search-loading" style="color:var(--danger)">Erro: ${errorData.message || 'Falha no servidor'}</div>`;
+                const msg = errorData.message || errorData.error || 'Falha no servidor';
+                itemList.innerHTML = `
+                    <div class="search-loading" style="color:var(--danger); flex-direction: column; gap: 10px;">
+                        <span>Erro: ${msg}</span>
+                        <button class="btn-primary" style="padding: 5px 15px; font-size: 12px;" onclick="location.reload()">Tentar Novamente</button>
+                    </div>`;
                 return;
             }
 
             const data = await response.json();
 
             if (data.error) {
-                itemList.innerHTML = `<div class="search-loading" style="color:var(--danger)">Erro: ${data.error}</div>`;
+                itemList.innerHTML = `
+                    <div class="search-loading" style="color:var(--danger); flex-direction: column; gap: 10px;">
+                        <span>Erro: ${data.error}</span>
+                        <button class="btn-primary" style="padding: 5px 15px; font-size: 12px;" id="retry-items-btn">Tentar Novamente</button>
+                    </div>`;
+                document.getElementById('retry-items-btn')?.addEventListener('click', () => {
+                    loadFinalItems(card, type, parentCode, itemContainer, itemList);
+                });
                 return;
             }
 

@@ -16,21 +16,25 @@ class ComprasGovLookupController extends Controller
 {
     public function materialGroups(CatalogSearchRequest $request, MaterialCatalogService $service): JsonResponse
     {
+        session_write_close();
         return response()->json($service->getGroups());
     }
 
     public function materialClasses(CatalogSearchRequest $request, MaterialCatalogService $service): JsonResponse
     {
+        session_write_close();
         return response()->json($service->getClasses((int) $request->codigoGrupo));
     }
 
     public function materialPdms(CatalogSearchRequest $request, MaterialCatalogService $service): JsonResponse
     {
+        session_write_close();
         return response()->json($service->getPdms((int) $request->codigoClasse));
     }
 
     public function materialItems(CatalogSearchRequest $request, MaterialCatalogService $service): JsonResponse
     {
+        session_write_close();
         return response()->json($service->searchItems($this->normalize($request)));
     }
 
@@ -46,31 +50,37 @@ class ComprasGovLookupController extends Controller
 
     public function serviceSections(CatalogSearchRequest $request, ServiceCatalogService $service): JsonResponse
     {
+        session_write_close();
         return response()->json($service->getSections());
     }
 
     public function serviceDivisions(CatalogSearchRequest $request, ServiceCatalogService $service): JsonResponse
     {
+        session_write_close();
         return response()->json($service->getDivisions($request->codigoSecao));
     }
 
     public function serviceGroups(CatalogSearchRequest $request, ServiceCatalogService $service): JsonResponse
     {
+        session_write_close();
         return response()->json($service->getGroups((int) $request->codigoDivisao));
     }
 
     public function serviceClasses(CatalogSearchRequest $request, ServiceCatalogService $service): JsonResponse
     {
+        session_write_close();
         return response()->json($service->getClasses((int) $request->codigoGrupo));
     }
 
     public function serviceSubclasses(CatalogSearchRequest $request, ServiceCatalogService $service): JsonResponse
     {
+        session_write_close();
         return response()->json($service->getSubclasses((int) $request->codigoClasse));
     }
 
     public function serviceItems(CatalogSearchRequest $request, ServiceCatalogService $service): JsonResponse
     {
+        session_write_close();
         return response()->json($service->searchItems($this->normalize($request)));
     }
 
