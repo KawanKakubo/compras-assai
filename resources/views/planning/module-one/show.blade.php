@@ -11,7 +11,7 @@
         })();
     </script>
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <link rel="stylesheet" href="{{ asset('css/documents.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/documents.css') }}?v={{ time() }}">
     <script src="{{ asset('js/wizard.js') }}?v={{ time() }}"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -22,25 +22,39 @@
 </head>
 <body class="document-view">
 
+    @php
+        $inicioRoute = match(true) {
+            auth()->user()?->isSecretaria() => route('secretaria.dashboard'),
+            auth()->user()?->isGabinete() => route('gabinete.dashboard'),
+            auth()->user()?->isCompras() => route('compras.dashboard'),
+            auth()->user()?->isAdmin() => route('admin.dashboard'),
+            default => '#',
+        };
+    @endphp
+
     <div class="action-bar no-print">
-        <div>
-            <h2 style="margin: 0; font-size: 1.2rem; display: flex; align-items: center; gap: 10px;">
-                <i class="ph ph-files"></i> 
-                Documentos Gerados — {{ $procurementRequest->reference_code }}
-                <span class="status-badge status-{{ $procurementRequest->status }}" style="font-size: 0.7rem; padding: 4px 8px; border-radius: 6px; background: rgba(255,255,255,0.1); text-transform: uppercase;">
+        <div class="action-title">
+            <div class="action-title-row">
+                <h2>
+                    <i class="ph ph-files"></i> 
+                    Documentos Gerados — {{ $procurementRequest->reference_code }}
+                </h2>
+                <span class="status-badge status-{{ $procurementRequest->status }}">
                     {{ str_replace('_', ' ', $procurementRequest->status) }}
                 </span>
-            </h2>
-            <span style="font-size: 0.85rem; color: #9ca3af;">{{ $legalFraming === 'licitacao' ? 'Licitação' : 'Dispensa de Licitação' }}</span>
+            </div>
+            <span class="action-subtitle">{{ $legalFraming === 'licitacao' ? 'Licitação' : 'Dispensa de Licitação' }}</span>
         </div>
-        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-            <a class="btn" style="background: #374151; text-decoration: none;" href="{{ route('planning.module-one.create') }}">
-                <i class="ph ph-plus"></i> Nova Demanda
-            </a>
-            <a class="btn" style="background: #1e293b; text-decoration: none;" href="{{ auth()->user()->isSecretaria() ? route('secretaria.dashboard') : '#' }}">
+        <div class="action-buttons">
+            @if(auth()->user()?->isSecretaria())
+                <a class="btn btn-secondary" href="{{ route('planning.module-one.create') }}">
+                    <i class="ph ph-plus"></i> Nova Demanda
+                </a>
+            @endif
+            <a class="btn btn-secondary" href="{{ $inicioRoute }}">
                 <i class="ph ph-house"></i> Início
             </a>
-            <button class="btn" style="background: #4b5563;" onclick="window.print()">
+            <button class="btn btn-primary" onclick="window.print()">
                 <i class="ph ph-printer"></i> Imprimir Página
             </button>
         </div>
@@ -69,17 +83,17 @@
             <div class="final-actions">
                 @if($procurementRequest->canBeSigned() && auth()->user()->isSecretario())
                     @if(config('assinador.bypass') && app()->isLocal())
-                        <button class="btn-gabinete" style="background: #059669; box-shadow: 0 4px 14px rgba(5, 150, 105, 0.4); margin-bottom: 8px;" onclick="directBypassAuthorize()">
+                        <button class="btn-gabinete btn-gabinete-success" style="margin-bottom: 8px;" onclick="directBypassAuthorize()">
                             <i class="ph ph-check-circle"></i> Autorizar (Modo Teste)
                         </button>
                     @endif
-                    <button class="btn-gabinete" style="background: #7c3aed; box-shadow: 0 4px 14px rgba(124, 58, 237, 0.4);" onclick="openSignatureModal()">
+                    <button class="btn-gabinete btn-gabinete-purple" onclick="openSignatureModal()">
                         <i class="ph ph-pen-nib"></i> Assinar Agora
                     </button>
                 @elseif($procurementRequest->canBeSubmitted())
                     <form action="{{ route('planning.module-one.submit', $procurementRequest) }}" method="POST">
                         @csrf
-                        <button type="submit" class="btn-gabinete">
+                        <button type="submit" class="btn-gabinete btn-gabinete-success">
                             <i class="ph ph-paper-plane-tilt"></i> Enviar para Gabinete
                         </button>
                     </form>
@@ -145,8 +159,8 @@
                 <div style="background: rgba(124, 58, 237, 0.1); width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
                     <i class="ph ph-shield-check" style="font-size: 32px; color: #7c3aed;"></i>
                 </div>
-                <h3 style="margin: 0; color: #f8fafc;">Assinatura Digital Avançada</h3>
-                <p style="font-size: 0.9rem; color: #94a3b8; margin-top: 8px;">Para assinar este documento, enviaremos um código de segurança.</p>
+                <h3>Assinatura Digital Avançada</h3>
+                <p>Para assinar este documento, enviaremos um código de segurança.</p>
             </div>
 
             <div id="mfa-step-request">
@@ -156,11 +170,11 @@
             </div>
 
             <div id="mfa-step-verify" style="display: none;">
-                <div style="margin-bottom: 16px;">
-                    <label style="display: block; font-size: 0.8rem; color: #94a3b8; margin-bottom: 8px;">Código de 6 dígitos</label>
-                    <input type="text" id="mfa-code" maxlength="6" style="width: 100%; background: rgba(15, 23, 42, 0.5); border: 1px solid #334155; padding: 12px; border-radius: 8px; color: white; font-size: 1.2rem; text-align: center; letter-spacing: 4px;">
+                <div class="mfa-input-wrapper">
+                    <label>Código de 6 dígitos</label>
+                    <input type="text" id="mfa-code" class="mfa-input" maxlength="6" placeholder="000000">
                 </div>
-                <button type="button" class="btn-full" style="background: #10b981;" onclick="confirmSignature()" id="btn-confirm-sign">
+                <button type="button" class="btn-full btn-success" onclick="confirmSignature()" id="btn-confirm-sign">
                     Confirmar e Assinar PDF
                 </button>
             </div>
@@ -168,30 +182,6 @@
             <button type="button" class="btn-cancel" onclick="closeSignatureModal()">Cancelar</button>
         </div>
     </div>
-
-    <style>
-        .modal-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(8px);
-            display: flex; align-items: center; justify-content: center; z-index: 1000;
-        }
-        .signature-modal-card {
-            background: #1e293b; border: 1px solid #334155; border-radius: 20px;
-            padding: 32px; width: 400px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-        }
-        .btn-full {
-            width: 100%; background: #2563eb; color: white; border: none;
-            padding: 14px; border-radius: 12px; font-weight: 600; cursor: pointer;
-            display: flex; align-items: center; justify-content: center; gap: 10px;
-            margin-bottom: 12px; transition: 0.2s;
-        }
-        .btn-full:hover { filter: brightness(1.1); }
-        .btn-cancel {
-            width: 100%; background: transparent; color: #94a3b8; border: none;
-            padding: 8px; font-size: 0.9rem; cursor: pointer;
-        }
-        @media print { .modal-overlay { display: none !important; } }
-    </style>
 
     <script>
         const signatureModal = document.getElementById('signature-modal');
