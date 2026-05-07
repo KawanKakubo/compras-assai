@@ -316,6 +316,11 @@
                     <div class="hint">Apresente os motivos que levaram a esta contratação e sua relação com as atividades do órgão.</div>
                     <textarea name="study[motivation]" rows="3" placeholder="Se vazio, usará a justificativa geral..."></textarea>
                 </div>
+                <div class="form-group">
+                    <label>Estimativa da Demanda <span class="hint">(ETP Seção 2.3)</span></label>
+                    <div class="hint">Descreva o cálculo ou a estimativa de consumo dos materiais ou contratação do serviço.</div>
+                    <textarea name="study[demand_estimate]" rows="3" placeholder="Abaixo segue a relação detalhada dos itens e quantidades estimadas, calculadas de acordo com as necessidades da pasta..."></textarea>
+                </div>
             </div>
 
             <div class="card">
@@ -334,6 +339,18 @@
                 <div class="form-group">
                     <label>Justificativa para Parcelamento ou Não Parcelamento <span class="legal-ref">Art. 18, § 1º, VIII</span></label>
                     <textarea name="study[parceling_justification]" rows="2">O objeto não será parcelado em lotes visando a economia de escala e a padronização do fornecimento, além de evitar a gestão de múltiplos contratos para o mesmo fim.</textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Providências Prévias ao Contrato <span class="legal-ref">Art. 18, § 1º, XI</span></label>
+                    <div class="hint">Descreva medidas necessárias antes de celebrar o contrato (ex: indicação de fiscal, adequação física).</div>
+                    <textarea name="study[prerequisites]" rows="3" placeholder="Indicar as providências prévias necessárias, ou deixe em branco para preenchimento padrão..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Contratações Correlatas e/ou Interdependentes <span class="legal-ref">Art. 18, § 1º, VI</span></label>
+                    <div class="hint">Informe se há outras contratações vinculadas ou interdependentes a esta.</div>
+                    <textarea name="study[correlated_contracts]" rows="3" placeholder="Não foram identificadas contratações correlatas ou interdependentes necessárias..."></textarea>
                 </div>
             </div>
             
@@ -385,6 +402,12 @@
                         <label class="toggle-btn" style="color:var(--warning)"><input type="radio" name="study[viability_decision]" value="viable_with_restrictions"> Viável com Restrições</label>
                         <label class="toggle-btn" style="color:var(--danger)"><input type="radio" name="study[viability_decision]" value="not_viable"> Inviável</label>
                     </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 16px;">
+                    <label>Justificativa da Viabilidade *</label>
+                    <div class="hint">Justifique os motivos técnicos, econômicos e operacionais que fundamentam a decisão de viabilidade da contratação.</div>
+                    <textarea name="study[viability_justification]" required rows="3" id="viability-justification-textarea" placeholder="A contratação se mostra viável sob os aspectos técnicos, econômicos e operacionais...">Com base nos estudos realizados, a contratação se mostra plenamente viável sob os aspectos técnicos, econômicos e operacionais, atendendo com eficiência ao interesse público e às necessidades da pasta.</textarea>
                 </div>
             </div>
 

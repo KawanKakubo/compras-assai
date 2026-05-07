@@ -17,36 +17,35 @@ class DocumentTemplateService
         $templatePath = base_path('docs/MODELO_SD.docx');
         $outputPath = storage_path('app/public/DFD_' . $request->reference_code . '_' . time() . '.docx');
 
-        $secName = $request->secretaria;
+        $secKey = $request->secretaria;
+        $secretariaFullName = config("compras.secretarias.{$secKey}") ?? $secKey;
+
+        $prioritiesMap = [
+            'low' => 'Baixa',
+            'medium' => 'Média',
+            'high' => 'Alta',
+        ];
+        $prioridadeStr = $prioritiesMap[$request->priority_level] ?? 'Média';
+        if ($request->priority_level === 'high' && !empty($request->priority_justification)) {
+            $prioridadeStr .= ". Justificativa: " . $request->priority_justification;
+        }
 
         $data = [
             'placeholders' => [
-                '{{referencia}}' => $request->reference_code,
-                '{{objeto}}' => $request->object_summary,
-                '{{justificativa}}' => $request->need_justification,
-                'NOME:_autor' => ($request->requester_name ?? 'Não informado'),
-                'CPF:_autor' => ($request->requester_cpf ?? ''),
-                'CARGO/FUNÇÃO:_autor' => ($request->requester_role ?? ''),
-                'NOME:_secretario' => ($request->responsible_name ?? 'Não informado'),
-                'CPF:_secretario' => ($request->responsible_cpf ?? ''),
-                'CARGO/FUNÇÃO:_secretario' => ($request->responsible_role ?? ''),
-                
-                '___SECRETARIA___' => $secName,
-                '___ANO___' => date('Y'),
-                '___CODIGO_REF___' => $request->reference_code,
-            ],
-            'instructions' => [
-                'Data prevista para conclusão do processo' => $request->planned_conclusion_at ? $request->planned_conclusion_at->format('d/m/Y') : 'Não informada',
-                'Descrição sucinta do objeto' => $request->object_summary,
-                'Grau de prioridade da compra ou contratação' => $request->priority_level === 'high' ? 'Alta' : ($request->priority_level === 'medium' ? 'Média' : 'Baixa'),
-                'Justificativa da necessidade da contratação' => $request->need_justification,
-                'Indicação de vinculação ou dependência com objeto de outro documento de formalização de demanda' => $request->linked_request ?? 'Não se aplica',
-                'IMPACTOS AMBIENTAIS' => $request->environmental_impacts ?? 'Não foram identificados impactos significativos.',
-                'LOGISTICA REVERSA' => $request->reverse_logistics ?? 'Não se aplica.',
-                'Aplica:' => $request->municipal_policy_applies ? 'Sim' : 'Não',
-                'justificativa para a aplicação' => $request->municipal_policy_justification ?? 'Não se aplica.',
-                'Requisitante (Unidade/Setor/Depto)' => $request->requisition_unit ?? $secName,
-                'Programa Compras ____?' => $request->studies->first()?->municipal_program_eligible ? 'Sim' : 'Não',
+                '{{ data_prevista }}' => $request->planned_conclusion_at ? $request->planned_conclusion_at->format('d/m/Y') : 'Não prevista',
+                '{{ descricao_objeto }}' => $request->object_summary ?: $request->title,
+                '{{ grau_prioridade }}' => $prioridadeStr,
+                '{{ justificativa_contratacao }}' => $request->need_justification,
+                '{{ vinculacao_outro_contratacao }}' => $request->linked_request ?: 'Não há vinculação ou dependência com outro documento de formalização de demanda.',
+                '{{ impactos_ambientais }}' => $request->environmental_impacts ?: 'Não foram identificados impactos ambientais significativos.',
+                '{{ logistica_reversa }}' => $request->reverse_logistics ?: 'Não se aplica.',
+                '{{ secretaria_requisitante }}' => $secretariaFullName,
+                '{{ nome_autor }}' => $request->requester_name ?: 'Não informado',
+                '{{ cpf_autor }}' => $request->requester_cpf ?: 'Não informado',
+                '{{ funcao_autor }}' => $request->requester_role ?: 'Não informado',
+                '{{ nome_secretario }}' => $request->responsible_name ?: 'Não informado',
+                '{{ cpf_secretario }}' => $request->responsible_cpf ?: 'Não informado',
+                '{{ funcao_secretario }}' => $request->responsible_role ?: 'Não informado',
             ],
             'items' => $request->items->map(fn($item) => [
                 'description' => $item->description,
@@ -64,66 +63,71 @@ class DocumentTemplateService
      */
     public function generateEtp(ProcurementRequest $request): string
     {
-        $request->loadMissing(['items', 'studies', 'user']);
+        $request->loadMissing(['items', 'studies']);
         $templatePath = base_path('docs/MODELO_ETP.docx');
         $outputPath = storage_path('app/public/ETP_' . $request->reference_code . '_' . time() . '.docx');
 
         $study = $request->studies->first();
-        
-        $viability = "Viável";
-        if ($study?->viability_decision === 'not_viable') {
-            $viability = "Inviável";
-        } elseif ($study?->viability_decision === 'viable_with_restrictions') {
-            $viability = "Viável com restrições";
+        $secKey = $request->secretaria;
+        $secretariaFullName = config("compras.secretarias.{$secKey}") ?? $secKey;
+
+        // PCA Field format
+        $previstaPca = "Não.";
+        if ($study && $study->is_in_pca) {
+            $previstaPca = "Sim. Referência no PCA: " . ($study->pca_reference ?: 'Não informada') . " - Descrição do Item: " . ($study->pca_description ?: 'Não informada');
         }
 
+        // Viability text
+        $viabilityDecision = "Viável";
+        if ($study?->viability_decision === 'viable_with_restrictions') {
+            $viabilityDecision = "Viável com restrições";
+        } elseif ($study?->viability_decision === 'not_viable') {
+            $viabilityDecision = "Inviável";
+        }
+        $viabilidadeText = "{$viabilityDecision}. Justificativa: " . ($study?->viability_justification ?: 'A contratação atende plenamente aos requisitos de interesse público, oportunidade e conveniência do município.');
+
+        // Fallbacks for ETP textareas
+        $providencias = $study?->prerequisites ?: 'Para a execução da contratação, a Administração adotará as seguintes providências prévias: indicação formal do fiscal e gestor do contrato para acompanhamento e recebimento do objeto; conferência das especificações técnicas fornecidas pelo contratado; garantia de espaço físico/infraestrutura necessária para entrega e armazenamento dos itens; e alinhamento dos procedimentos de liquidação e pagamento junto à Secretaria de Finanças. Não há outras providências complexas ou atípicas pendentes.';
+        
+        $contratacoesCorrelatas = $study?->correlated_contracts ?: 'Não foram identificadas contratações correlatas ou interdependentes necessárias para a viabilidade ou complementação do objeto desta contratação.';
+        
+        $requisitosSolucao = $study?->solution_requirements ?: 'A solução deverá atender integralmente aos requisitos de qualidade, durabilidade, prazos de entrega e especificações detalhadas no termo de referência e catálogo CATMAT/CATSER. Os produtos/serviços fornecidos deverão estar em perfeita conformidade com as normas técnicas vigentes e padrões exigidos pela legislação.';
+        
+        $estimativaDemanda = $study?->demand_estimate ?: 'A estimativa da demanda foi realizada com base no levantamento histórico de consumo do órgão e no planejamento anual de necessidades da Secretaria Requisitante, buscando dimensionar de forma precisa e eficiente o quantitativo necessário para evitar desperdícios ou descontinuidade dos serviços públicos.';
+        
+        $impactosAmbientais = $study?->environmental_analysis ?: ($request->environmental_impacts ?: 'Os itens e serviços serão contratados observando os critérios de sustentabilidade ambiental, minimização de resíduos e eficiência energética aplicáveis. Não são previstos impactos ambientais negativos significativos. O fornecedor deverá observar as normas de descarte adequado e logística reversa quando aplicável à natureza do objeto.');
+        
+        $levantamentoSolucoes = $study?->solution_mapping ?: 'Foi realizado o levantamento de soluções no mercado, identificando-se que o fornecimento dos materiais/serviços descritos via catálogo CATMAT/CATSER representa a alternativa mais vantajosa, segura e padronizada para a Administração Pública, garantindo ampla competitividade e conformidade com a Lei 14.133/2021.';
+        
+        $parcelamento = $study?->parceling_justification ?: 'O objeto não será parcelado em lotes ou itens separados de forma a comprometer a economia de escala, a padronização e a eficiência administrativa do fornecimento. A contratação unificada é a mais adequada para assegurar a responsabilidade única pelo adimplemento da obrigação.';
+        
+        $descricaoSolucao = $study?->chosen_solution ?: $request->object_summary;
+        
+        $resultadosPretendidos = $study?->expected_results ?: 'Espera-se com esta contratação obter a melhoria contínua na prestação dos serviços públicos da Secretaria Requisitante, garantindo o suprimento tempestivo e regular das necessidades operacionais, com otimização dos recursos financeiros aplicados e total transparência.';
+
         $data = [
-            'instructions' => [
-                'Descrição da Necessidade' => $study?->need_description ?: $request->need_justification,
-                '1. Descrição da necessidade da contratação' => $study?->need_description ?: $request->need_justification,
-                'Motivação/Justificativa' => $study?->motivation ?: $request->need_justification,
-                'Está prevista no Plano de Contratações Anual (PCA)?' => $study?->is_in_pca ? 'Sim' : 'Não',
-                'Referência PCA:' => $study?->pca_reference ?: 'Não se aplica',
-                'Descrição da demonstração:' => $study?->pca_description ?: ($study?->pca_demonstration ?: 'Não se aplica'),
-                'Identificação da Área requisitante' => $request->requisition_unit ?? $request->secretaria,
-                'Justificativa da Necessidade da Contratação' => $study?->need_description ?: $request->need_justification,
-                'Providências Prévias ao Contrato' => $study?->prerequisites ?: 'Não se aplica.',
-                '11. Providências Prévias ao Contrato' => $study?->prerequisites ?: 'Não se aplica.',
-                'Contratações Correlatas e/ou Interdependentes' => $study?->correlated_contracts ?: ($study?->linked_contracts ?: 'Não foram identificadas contratações correlatas.'),
-                'Requisitos Necessários à Solução' => $study?->solution_requirements ?: 'Não foram identificados requisitos específicos.',
-                'Análise dos Possíveis Impactos Ambientais e Logística Reversa' => $study?->environmental_analysis ?: ($request->environmental_impacts ?: 'Não foram identificados impactos significativos.'),
-                '12. Impactos Ambientais' => $study?->environmental_analysis ?: ($request->environmental_impacts ?: 'Não foram identificados impactos significativos.'),
-                'Levantamento de Soluções' => $study?->solution_mapping ?: ($study?->solution_survey ?: 'A solução proposta foi baseada na necessidade direta da secretaria.'),
-                'Registro de Soluções Consideradas Inviáveis' => $study?->discarded_solutions ?: ($study?->unviable_solutions ?: 'Não foram identificadas soluções inviáveis relevantes.'),
-                'Justificativa para o Parcelamento ou Não da Contratação' => $study?->parceling_justification ?: ($study?->splitting_justification ?: 'O objeto não será parcelado visando a economia de escala.'),
-                '8. Justificativa para o parcelamento' => $study?->parceling_justification ?: ($study?->splitting_justification ?: 'O objeto não será parcelado visando a economia de escala.'),
-                'Descrição da Solução a ser Contratada' => $study?->chosen_solution ?: ($study?->solution_description ?: $request->object_summary),
-                '7. Descrição da solução como um todo' => $study?->chosen_solution ?: ($study?->solution_description ?: $request->object_summary),
-                'Estimativa de Custo Total da Contratação' => 'Conforme tabela de itens gerada abaixo.',
-                '9. Estimativa do Valor da Contratação' => 'Conforme tabela de itens gerada abaixo.',
-                'Demonstrativos dos Resultados Pretendidos' => $study?->expected_results ?: ($study?->intended_results ?: 'Atendimento imediato da demanda para continuidade do serviço público.'),
-                '10. Resultados Pretendidos' => $study?->expected_results ?: ($study?->intended_results ?: 'Atendimento imediato da demanda para continuidade do serviço público.'),
-                'Análise de Viabilidade da Contratação' => $study?->viability_analysis ?: "A contratação é considerada $viability.",
-                '13. Declaração de Viabilidade' => $study?->viability_analysis ?: "A contratação é considerada $viability.",
-                'Viabilidade' => $viability,
-                'Justificativa' => $study?->viability_justification ?: 'A demanda atende aos requisitos técnicos e econômicos do órgão.',
-                'Nome do responsável' => $request->requester_name ?? 'Não informado',
-                'Estimativa da Demanda' => 'Abaixo segue a relação detalhada dos itens e quantidades estimadas:',
-                'Programa de Compras – Levantamento de Soluções' => $study?->municipal_program_eligible ? "Item enquadrado no Programa Municipal de Compras para fomento local." : "Não se aplica.",
-            ],
             'placeholders' => [
-                'NOME:_autor' => ($request->requester_name ?? 'Não informado'),
-                'CPF:_autor' => ($request->requester_cpf ?? ''),
-                'CARGO/FUNÇÃO:_autor' => ($request->requester_role ?? ''),
-                'NOME:_secretario' => ($request->responsible_name ?? 'Não informado'),
-                'CPF:_secretario' => ($request->responsible_cpf ?? ''),
-                'CARGO/FUNÇÃO:_secretario' => ($request->responsible_role ?? ''),
-                
-                '___SECRETARIA___' => config('compras.secretarias')[$request->secretaria] ?? $request->secretaria,
-                '___ANO___' => date('Y'),
-                '___DATA_HOJE___' => date('d/m/Y'),
-                '___OBJETO_TITULO___' => $request->title,
-                '{{declaracao_viabilidade}}' => "A contratação é considerada $viability.",
+                '{{ descricao_necessidade }}' => $study?->need_description ?: $request->need_justification,
+                '{{ motivacao_justificativa }}' => $study?->motivation ?: $request->need_justification,
+                '{{ prevista_pca }}' => $previstaPca,
+                '{{ secretaria_requisitante }}' => $secretariaFullName,
+                '{{ justificativa_contratacao }}' => $request->need_justification,
+                '{{ providencias_previas }}' => $providencias,
+                '{{ contratacoes_correlatas }}' => $contratacoesCorrelatas,
+                '{{ requisitos_solucao }}' => $requisitosSolucao,
+                '{{ estimativa_demanda }}' => $estimativaDemanda,
+                '{{ analise_possivel_impacto_ambiental }}' => $impactosAmbientais,
+                '{{ levantamento_solucoes }}' => $levantamentoSolucoes,
+                '{{ parcelamento_ou_nao }}' => $parcelamento,
+                '{{ descricao_solucao }}' => $descricaoSolucao,
+                '{{ demonstrativo_resultados }}' => $resultadosPretendidos,
+                '{{ viabilidade }}' => $viabilidadeText,
+                '{{ nome_autor }}' => $request->requester_name ?: 'Não informado',
+                '{{ cpf_autor }}' => $request->requester_cpf ?: 'Não informado',
+                '{{ funcao_autor }}' => $request->requester_role ?: 'Não informado',
+                '{{ nome_secretario }}' => $request->responsible_name ?: 'Não informado',
+                '{{ cpf_secretario }}' => $request->responsible_cpf ?: 'Não informado',
+                '{{ funcao_secretario }}' => $request->responsible_role ?: 'Não informado',
             ],
             'items' => $request->items->map(fn($item) => [
                 'description' => $item->description,

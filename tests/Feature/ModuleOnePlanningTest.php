@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\User;
 use App\Models\Planning\ProcurementItem;
 use App\Models\Planning\ProcurementRequest;
 use App\Models\Planning\ProcurementStudy;
@@ -12,17 +13,18 @@ class ModuleOnePlanningTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_module_one_page_is_accessible(): void
+    private function createElaboradorUser(): User
     {
-        $response = $this->get('/planejamento/modulo-1');
-
-        $response->assertOk();
-        $response->assertSee('Solicitação de Demanda, ETP e Termo de Referência');
+        return User::factory()->create([
+            'role' => 'elaborador',
+            'secretaria_acronym' => 'SAUDE',
+            'secretaria_name' => 'Secretaria Municipal de Saúde',
+        ]);
     }
 
-    public function test_module_one_submission_persists_request_study_and_items(): void
+    private function getValidPayload(): array
     {
-        $payload = [
+        return [
             'reference_code' => 'REQ-2026-001',
             'title' => 'Aquisição de cadeiras ergonômicas',
             'object_summary' => 'Cadeiras ergonômicas para postos administrativos.',
@@ -34,6 +36,7 @@ class ModuleOnePlanningTest extends TestCase
             'environmental_impacts' => 'Produto com maior durabilidade reduz descarte.',
             'reverse_logistics' => 'Fornecedor deve prever recolhimento de embalagens.',
             'municipal_policy_applies' => 0,
+            'secretaria' => 'SAUDE',
             'requisition_unit' => 'Coordenação Administrativa',
             'requester_name' => 'Maria Requisitante',
             'requester_cpf' => '000.000.000-00',
@@ -61,7 +64,7 @@ class ModuleOnePlanningTest extends TestCase
                 'municipal_policy_applies' => 0,
                 'municipal_policy_analysis' => '',
                 'viability_decision' => 'viable',
-                'viability_justification' => 'Existe solução adequada no mercado.',
+                'viability_justification' => 'Existe solução adequada no mercado sob aspectos operacionais.',
                 'team_signatures' => [
                     ['name' => 'Maria Requisitante', 'role' => 'Requisitante', 'signature_date' => '2026-04-21'],
                     ['name' => 'João Responsável', 'role' => 'Aprovador', 'signature_date' => '2026-04-21'],
@@ -82,8 +85,24 @@ class ModuleOnePlanningTest extends TestCase
                 ],
             ],
         ];
+    }
 
-        $response = $this->post(route('planning.module-one.store'), $payload);
+    public function test_module_one_page_is_accessible(): void
+    {
+        $user = $this->createElaboradorUser();
+
+        $response = $this->actingAs($user)->get(route('planning.module-one.create'));
+
+        $response->assertOk();
+        $response->assertSee('Assistente Inteligente de Planejamento da Contratação');
+    }
+
+    public function test_module_one_submission_persists_request_study_and_items(): void
+    {
+        $user = $this->createElaboradorUser();
+        $payload = $this->getValidPayload();
+
+        $response = $this->actingAs($user)->post(route('planning.module-one.store'), $payload);
 
         $response->assertRedirect();
 
@@ -94,31 +113,64 @@ class ModuleOnePlanningTest extends TestCase
         $this->assertSame('REQ-2026-001', $request->reference_code);
         $this->assertSame('Aquisição de cadeiras ergonômicas', $request->title);
         $this->assertSame('10 unidades para o primeiro ciclo.', $study->demand_estimate);
+        $this->assertSame('Espaço físico disponível e entrega fracionada.', $study->prerequisites);
+        $this->assertSame('Contrato anterior encerrado em 2025.', $study->correlated_contracts);
+        $this->assertSame('Existe solução adequada no mercado sob aspectos operacionais.', $study->viability_justification);
         $this->assertSame('8999.00', $study->estimated_total_cost);
         $this->assertSame('206504', $item->catalog_code);
         $this->assertSame('8999.00', $item->total_value);
 
-        $this->get(route('planning.module-one.show', $request))
+        $this->actingAs($user)->get(route('planning.module-one.show', $request))
             ->assertOk()
-            ->assertSee('Termo de Referência')
-            ->assertSee('Aquisição de cadeiras ergonômicas');
+            ->assertSee('Estudo Técnico Preliminar (ETP)');
     }
 
     public function test_module_one_requires_at_least_one_item(): void
     {
+        $user = $this->createElaboradorUser();
+
         $payload = [
             'title' => 'Teste',
             'object_summary' => 'Resumo do objeto.',
             'priority_level' => 'medium',
             'need_justification' => 'Necessidade.',
+            'secretaria' => 'SAUDE',
             'study' => [
                 'need_description' => 'Descrição da necessidade.',
                 'viability_decision' => 'viable',
             ],
         ];
 
-        $this->postJson(route('planning.module-one.store'), $payload)
+        $this->actingAs($user)->postJson(route('planning.module-one.store'), $payload)
             ->assertStatus(422)
             ->assertJsonValidationErrors(['items']);
+    }
+
+    public function test_module_one_downloads_sd_successfully(): void
+    {
+        $user = $this->createElaboradorUser();
+        $payload = $this->getValidPayload();
+
+        $this->actingAs($user)->post(route('planning.module-one.store'), $payload);
+        $request = ProcurementRequest::query()->firstOrFail();
+
+        $response = $this->actingAs($user)->get(route('planning.module-one.download-sd', $request));
+
+        $response->assertOk();
+        $response->assertHeader('content-type', 'application/octet-stream');
+    }
+
+    public function test_module_one_downloads_etp_successfully(): void
+    {
+        $user = $this->createElaboradorUser();
+        $payload = $this->getValidPayload();
+
+        $this->actingAs($user)->post(route('planning.module-one.store'), $payload);
+        $request = ProcurementRequest::query()->firstOrFail();
+
+        $response = $this->actingAs($user)->get(route('planning.module-one.download-etp', $request));
+
+        $response->assertOk();
+        $response->assertHeader('content-type', 'application/octet-stream');
     }
 }

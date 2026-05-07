@@ -100,6 +100,8 @@ document.addEventListener('DOMContentLoaded', () => {
         window.scrollTo(0, 0);
     });
     
+
+    
     // ── Conditional Logic ────────────────────────────────────────────────────
     function setupConditionals() {
         const toggleConditionals = [
@@ -144,8 +146,36 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
         });
+
+        // Setup toggle buttons visual active states & viability justification autofill
+        const toggleGroups = document.querySelectorAll('.toggle-group');
+        toggleGroups.forEach(group => {
+            const radios = group.querySelectorAll('input[type="radio"]');
+            radios.forEach(radio => {
+                radio.addEventListener('change', () => {
+                    // Visual active state toggling
+                    group.querySelectorAll('.toggle-btn').forEach(btn => btn.classList.remove('active'));
+                    const parentLabel = radio.closest('.toggle-btn');
+                    if (parentLabel) parentLabel.classList.add('active');
+
+                    // Custom viability justification logic
+                    if (radio.name === 'study[viability_decision]') {
+                        const justificationTextarea = document.getElementById('viability-justification-textarea');
+                        if (justificationTextarea) {
+                            if (radio.value === 'viable') {
+                                justificationTextarea.value = "Com base nos estudos realizados, a contratação se mostra plenamente viável sob os aspectos técnicos, econômicos e operacionais, atendendo com eficiência ao interesse público e às necessidades da pasta.";
+                            } else if (radio.value === 'viable_with_restrictions') {
+                                justificationTextarea.value = "A contratação é viável, contanto que sejam observadas as restrições e condicionantes de designação tempestiva dos fiscais do contrato e a devida conformidade de especificações fornecidas pelo fornecedor.";
+                            } else if (radio.value === 'not_viable') {
+                                justificationTextarea.value = "A contratação é considerada inviável no momento atual devido a entraves técnicos, orçamentários ou operacionais insolúveis a curto prazo, recomendando-se a revisão do escopo do objeto.";
+                            }
+                        }
+                    }
+                });
+            });
+        });
     }
-    
+
     // ── Items Logic (Dynamic Addition & Deletion) ───────────────────────────
     let itemCounter = 0;
     
