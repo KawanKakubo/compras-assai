@@ -24,7 +24,7 @@
     <form action="{{ route('gabinete.dashboard') }}" method="GET" style="display: flex; gap: 1.5rem; align-items: flex-end;">
         <div style="flex-grow: 1;">
             <label style="display:block; margin-bottom:0.5rem; font-size:0.9rem; color:var(--text-muted);">Filtrar por Secretaria</label>
-            <select name="secretaria_id" style="width:100%; background:var(--dark-bg); border:1px solid var(--border); padding:0.8rem; border-radius:10px; color:#fff;">
+            <select name="secretaria_id" style="width:100%; background:var(--dark-bg); border:1px solid var(--border); padding:0.8rem; border-radius:10px; color:var(--text-main);">
                 <option value="">Todas as Secretarias</option>
                 @foreach($secretarias as $sec)
                     <option value="{{ $sec->id }}" {{ request('secretaria_id') == $sec->id ? 'selected' : '' }}>
@@ -35,7 +35,7 @@
         </div>
         <div>
             <label style="display:block; margin-bottom:0.5rem; font-size:0.9rem; color:var(--text-muted);">Status</label>
-            <select name="status" style="width:100%; background:var(--dark-bg); border:1px solid var(--border); padding:0.8rem; border-radius:10px; color:#fff;">
+            <select name="status" style="width:100%; background:var(--dark-bg); border:1px solid var(--border); padding:0.8rem; border-radius:10px; color:var(--text-main);">
                 <option value="em_analise" {{ request('status') == 'em_analise' ? 'selected' : '' }}>Pendentes</option>
                 <option value="aprovado_compras" {{ request('status') == 'aprovado_compras' ? 'selected' : '' }}>Aprovadas</option>
                 <option value="rejeitado" {{ request('status') == 'rejeitado' ? 'selected' : '' }}>Rejeitadas</option>
@@ -110,7 +110,7 @@
                             <h4>Justificativa da Rejeição</h4>
                             <form action="{{ route('gabinete.deny', $req->id) }}" method="POST">
                                 @csrf
-                                <textarea name="justification" required style="width: 100%; height: 100px; background: var(--dark-bg); color: #fff; border: 1px solid var(--border); padding: 10px; border-radius: 8px; margin: 15px 0;" placeholder="Informe o motivo da rejeição..."></textarea>
+                                <textarea name="justification" required style="width: 100%; height: 100px; background: var(--dark-bg); color: var(--text-main); border: 1px solid var(--border); padding: 10px; border-radius: 8px; margin: 15px 0;" placeholder="Informe o motivo da rejeição..."></textarea>
                                 <div style="display: flex; gap: 10px; justify-content: flex-end;">
                                     <button type="button" class="btn" onclick="this.parentElement.parentElement.parentElement.style.display = 'none'">Cancelar</button>
                                     <button type="submit" class="btn btn-primary">Confirmar Rejeição</button>

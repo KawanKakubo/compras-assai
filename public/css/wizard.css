@@ -5,6 +5,34 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 :root {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-input: #ffffff;
+  --bg-hover: rgba(37, 99, 235, 0.05);
+  --border: rgba(15, 23, 42, 0.08);
+  --border-focus: #2563eb;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-glow: rgba(37, 99, 235, 0.1);
+  --success: #10b981;
+  --success-bg: rgba(16,185,129,.08);
+  --warning: #f59e0b;
+  --warning-bg: rgba(245,158,11,.08);
+  --danger: #ef4444;
+  --danger-bg: rgba(239,68,68,.08);
+  --info: #3b82f6;
+  --info-bg: rgba(59,130,246,.08);
+  --radius: 16px;
+  --radius-sm: 10px;
+  --shadow: 0 10px 30px rgba(15,23,42,.05);
+  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-theme="dark"] {
   --bg-primary: #0f172a;
   --bg-secondary: #1e293b;
   --bg-card: #1e293b;
@@ -26,10 +54,7 @@
   --danger-bg: rgba(239,68,68,.12);
   --info: #3b82f6;
   --info-bg: rgba(59,130,246,.12);
-  --radius: 16px;
-  --radius-sm: 10px;
   --shadow: 0 10px 30px rgba(0,0,0,.4);
-  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -164,20 +189,20 @@ body {
 
 /* ── Cards ─────────────────────────────────────────── */
 .card {
-  background: rgba(30, 41, 59, 0.7);
+  background: var(--bg-card);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 32px;
   margin-bottom: 24px;
   transition: var(--transition);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow);
 }
 
 .card:hover { 
-  border-color: rgba(37, 99, 235, 0.4);
+  border-color: var(--accent);
   transform: translateY(-2px);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 10px 30px var(--accent-glow);
 }
 
 .card-title {
@@ -571,7 +596,7 @@ select { cursor: pointer; }
   border: 1px solid var(--accent);
   border-radius: var(--radius-sm);
   z-index: 110;
-  box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+  box-shadow: var(--shadow);
   overflow: hidden;
   display: none;
   backdrop-filter: blur(20px);
@@ -627,7 +652,7 @@ select { cursor: pointer; }
   gap: 12px;
   cursor: pointer;
   transition: var(--transition);
-  border-bottom: 1px solid rgba(255,255,255,0.03);
+  border-bottom: 1px solid var(--border);
 }
 
 .hierarchy-item:hover { background: var(--bg-hover); }
@@ -641,11 +666,12 @@ select { cursor: pointer; }
   font-size: .7rem;
   font-weight: 700;
   color: var(--text-secondary);
-  background: rgba(255,255,255,0.05);
+  background: var(--bg-primary);
   padding: 3px 8px;
   border-radius: 6px;
   min-width: 60px;
   text-align: center;
+  border: 1px solid var(--border);
 }
 
 .hierarchy-item .res-name {
@@ -666,7 +692,7 @@ select { cursor: pointer; }
     flex-direction: column;
     gap: 12px;
     margin-bottom: 20px;
-    background: rgba(0, 0, 0, 0.2);
+    background: var(--bg-primary);
     padding: 16px;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border);
@@ -731,4 +757,57 @@ select { cursor: pointer; }
     font-weight: 700;
     margin-right: 8px;
     opacity: 0.7;
+}
+
+/* ── Global Floating Theme Toggle ────────────────── */
+.theme-toggle-btn {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+    transition: var(--transition);
+    backdrop-filter: blur(8px);
+}
+
+.theme-toggle-btn:hover {
+    transform: scale(1.1) rotate(15deg);
+    border-color: var(--accent);
+}
+
+.theme-toggle-btn svg {
+    width: 20px;
+    height: 20px;
+    position: absolute;
+    transition: transform 0.5s ease, opacity 0.3s ease;
+}
+
+/* Light mode styles (default) */
+html:not([data-theme="dark"]) .theme-icon-sun {
+    opacity: 0;
+    transform: rotate(90deg) scale(0);
+}
+html:not([data-theme="dark"]) .theme-icon-moon {
+    opacity: 1;
+    transform: rotate(0) scale(1);
+}
+
+/* Dark mode styles */
+html[data-theme="dark"] .theme-icon-sun {
+    opacity: 1;
+    transform: rotate(0) scale(1);
+}
+html[data-theme="dark"] .theme-icon-moon {
+    opacity: 0;
+    transform: rotate(-90deg) scale(0);
 }

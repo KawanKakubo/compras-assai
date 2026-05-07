@@ -6,11 +6,26 @@
 :root {
   --doc-bg: #e5e7eb;
   --paper: #ffffff;
-  --text: #000000;
-  --border: #000000;
+  --text: #1f2937;
+  --text-main: #1f2937;
+  --text-primary: #1f2937;
+  --border: rgba(0, 0, 0, 0.15);
   --highlight: #f3f4f6;
   --print-width: 210mm;
   --print-padding: 2.5cm 2cm;
+  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-theme="dark"] {
+  --doc-bg: #0f172a;
+  --paper: #1e293b;
+  --text: #f8fafc;
+  --text-main: #f8fafc;
+  --text-primary: #f8fafc;
+  --border: rgba(255, 255, 255, 0.15);
+  --highlight: #334155;
+  --shadow: 0 10px 30px rgba(0,0,0,.4);
 }
 
 body.document-view {
@@ -174,15 +189,15 @@ table.official-table tr.total-row td {
 }
 
 .doc-card {
-  background: #ffffff;
+  background: var(--paper);
   border-radius: 16px;
   padding: 32px;
   display: flex;
   flex-direction: column;
   gap: 20px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--shadow);
   transition: transform 0.2s, box-shadow 0.2s;
-  border: 1px solid rgba(0,0,0,0.05);
+  border: 1px solid var(--border);
 }
 
 .doc-card:hover {
@@ -193,7 +208,7 @@ table.official-table tr.total-row td {
 .doc-card .icon-wrapper {
   width: 64px;
   height: 64px;
-  background: #f3f4f6;
+  background: var(--highlight);
   border-radius: 12px;
   display: flex;
   align-items: center;
@@ -205,13 +220,14 @@ table.official-table tr.total-row td {
 .doc-card h3 {
   margin: 0;
   font-size: 1.25rem;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .doc-card p {
   margin: 0;
   font-size: 0.95rem;
-  color: #6b7280;
+  color: var(--text-primary);
+  opacity: 0.7;
   line-height: 1.6;
 }
 
@@ -312,8 +328,72 @@ table.official-table tr.total-row td {
   opacity: 0.6;
 }
 
+/* ── Global Floating Theme Toggle ────────────────── */
+.theme-toggle-btn {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--paper);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+    transition: var(--transition);
+    backdrop-filter: blur(8px);
+}
+
+.theme-toggle-btn:hover {
+    transform: scale(1.1) rotate(15deg);
+    border-color: #4f46e5;
+}
+
+.theme-toggle-btn svg {
+    width: 20px;
+    height: 20px;
+    position: absolute;
+    transition: transform 0.5s ease, opacity 0.3s ease;
+}
+
+/* Light mode styles (default) */
+html:not([data-theme="dark"]) .theme-icon-sun {
+    opacity: 0;
+    transform: rotate(90deg) scale(0);
+}
+html:not([data-theme="dark"]) .theme-icon-moon {
+    opacity: 1;
+    transform: rotate(0) scale(1);
+}
+
+/* Dark mode styles */
+html[data-theme="dark"] .theme-icon-sun {
+    opacity: 1;
+    transform: rotate(0) scale(1);
+}
+html[data-theme="dark"] .theme-icon-moon {
+    opacity: 0;
+    transform: rotate(-90deg) scale(0);
+}
+
 /* ── Print Media Query ────────────────────────────── */
 @media print {
+  :root, [data-theme="dark"] {
+    --doc-bg: transparent;
+    --paper: #ffffff;
+    --text: #000000;
+    --text-primary: #000000;
+    --border: #000000;
+    --highlight: #f3f4f6;
+  }
+  .theme-toggle-btn {
+    display: none !important;
+  }
   body.document-view {
     background: transparent;
     padding: 0;

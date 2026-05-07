@@ -6,9 +6,29 @@
     <title>@yield('title', 'Dashboard') | Compras Assaí</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        (function () {
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        })();
+    </script>
     <style>
         :root {
             --primary: #0061ff;
+            --secondary: #2563eb;
+            --dark-bg: #f8fafc;
+            --card-bg: #ffffff;
+            --sidebar-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --border: rgba(15, 23, 42, 0.08);
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            --shadow: 0 10px 30px rgba(15,23,42,.05);
+            --nav-hover-bg: rgba(0, 97, 255, 0.05);
+            --nav-hover-color: var(--primary);
+        }
+
+        [data-theme="dark"] {
             --secondary: #60efff;
             --dark-bg: #0f172a;
             --card-bg: #1e293b;
@@ -16,6 +36,9 @@
             --text-main: #f8fafc;
             --text-muted: #94a3b8;
             --border: rgba(255, 255, 255, 0.1);
+            --shadow: 0 10px 30px rgba(0,0,0,.4);
+            --nav-hover-bg: rgba(255, 255, 255, 0.05);
+            --nav-hover-color: #ffffff;
         }
 
         * {
@@ -30,6 +53,7 @@
             color: var(--text-main);
             display: flex;
             min-height: 100vh;
+            transition: background-color 0.3s, color 0.3s;
         }
 
         /* Sidebar */
@@ -42,6 +66,8 @@
             padding: 2rem 1.5rem;
             position: fixed;
             height: 100vh;
+            color: var(--text-main);
+            transition: background-color 0.3s, border-color 0.3s, color 0.3s;
         }
 
         .sidebar-brand {
@@ -51,10 +77,13 @@
             display: flex;
             align-items: center;
             gap: 10px;
+            color: var(--text-main);
+            transition: color 0.3s;
         }
 
         .sidebar-brand span {
             color: var(--secondary);
+            transition: color 0.3s;
         }
 
         .nav-menu {
@@ -77,9 +106,9 @@
             transition: all 0.3s;
         }
 
-        .nav-link:hover, .nav-link.active {
-            background: rgba(255, 255, 255, 0.05);
-            color: #fff;
+        .nav-link:hover {
+            background: var(--nav-hover-bg);
+            color: var(--nav-hover-color);
         }
 
         .nav-link.active {
@@ -219,6 +248,59 @@
         .badge-success { background: rgba(16, 185, 129, 0.1); color: #10b981; }
         .badge-danger { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
 
+        /* ── Floating Theme Toggle ────────────────── */
+        .theme-toggle-btn {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            box-shadow: var(--shadow);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 99999;
+            transition: var(--transition);
+            backdrop-filter: blur(8px);
+        }
+
+        .theme-toggle-btn:hover {
+            transform: scale(1.1) rotate(15deg);
+            border-color: var(--primary);
+        }
+
+        .theme-toggle-btn svg {
+            width: 20px;
+            height: 20px;
+            position: absolute;
+            transition: transform 0.5s ease, opacity 0.3s ease;
+        }
+
+        /* Light mode styles (default) */
+        html:not([data-theme="dark"]) .theme-icon-sun {
+            opacity: 0;
+            transform: rotate(90deg) scale(0);
+        }
+        html:not([data-theme="dark"]) .theme-icon-moon {
+            opacity: 1;
+            transform: rotate(0) scale(1);
+        }
+
+        /* Dark mode styles */
+        html[data-theme="dark"] .theme-icon-sun {
+            opacity: 1;
+            transform: rotate(0) scale(1);
+        }
+        html[data-theme="dark"] .theme-icon-moon {
+            opacity: 0;
+            transform: rotate(-90deg) scale(0);
+        }
+
         @yield('styles')
     </style>
 </head>
@@ -300,5 +382,39 @@
     </main>
 
     @yield('scripts')
+
+    <!-- Floating Theme Toggle Button -->
+    <button id="theme-toggle-btn" class="theme-toggle-btn" aria-label="Alternar Tema" title="Alternar Tema">
+        <!-- Sun icon -->
+        <svg class="theme-icon-sun" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+        <!-- Moon icon -->
+        <svg class="theme-icon-moon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+    </button>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const toggleBtn = document.getElementById('theme-toggle-btn');
+            if (toggleBtn) {
+                toggleBtn.addEventListener('click', function() {
+                    const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+                    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                    document.documentElement.setAttribute('data-theme', newTheme);
+                    localStorage.setItem('theme', newTheme);
+                });
+            }
+        });
+    </script>
 </body>
 </html>
