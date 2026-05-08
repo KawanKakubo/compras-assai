@@ -20,6 +20,23 @@ class ModuleOneController extends Controller
         $user = auth()->user();
         $acronym = $user?->secretaria_acronym;
 
+        // Fetch the secretary for the logged-in user's secretariat
+        $secretary = null;
+        if ($user?->role === \App\Models\User::ROLE_SECRETARIO) {
+            $secretary = $user;
+        } elseif ($user?->secretaria_id) {
+            $secretary = \App\Models\User::where('role', \App\Models\User::ROLE_SECRETARIO)
+                ->where('secretaria_id', $user->secretaria_id)
+                ->first();
+        }
+
+        if (!$secretary && $acronym) {
+            // Fallback for legacy or loose associations
+            $secretary = \App\Models\User::where('role', \App\Models\User::ROLE_SECRETARIO)
+                ->where('secretaria_acronym', $acronym)
+                ->first();
+        }
+
         return view('planning.module-one.create', [
             'thresholds' => config('compras.lei_14133.dispensa.art75'),
             'secretarias' => config('compras.secretarias'),
@@ -28,6 +45,7 @@ class ModuleOneController extends Controller
             'programaMunicipal' => config('compras.programa_municipal'),
             'nextReferenceCode' => ProcurementRequest::generateReferenceCode($acronym),
             'currentUser' => $user,
+            'secretary' => $secretary,
         ]);
     }
 

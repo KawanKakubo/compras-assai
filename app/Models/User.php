@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-    #[Fillable(['name', 'email', 'password', 'role', 'secretaria_name', 'secretaria_acronym'])]
+    #[Fillable(['name', 'email', 'password', 'role', 'secretaria_name', 'secretaria_acronym', 'secretaria_id', 'cpf'])]
     #[Hidden(['password', 'remember_token'])]
     class User extends Authenticatable
     {
@@ -48,6 +48,21 @@ use Illuminate\Notifications\Notifiable;
         public function isCompras(): bool
         {
             return $this->role === self::ROLE_COMPRAS;
+        }
+
+        public function secretaria()
+        {
+            return $this->belongsTo(Secretaria::class);
+        }
+
+        public function getSecretariaNameAttribute()
+        {
+            return $this->secretaria ? $this->secretaria->name : ($this->attributes['secretaria_name'] ?? null);
+        }
+
+        public function getSecretariaAcronymAttribute()
+        {
+            return $this->secretaria ? $this->secretaria->acronym : ($this->attributes['secretaria_acronym'] ?? null);
         }
 
         public function procurementRequests()

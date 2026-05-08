@@ -32,6 +32,11 @@
             </div>
 
             <div style="margin-bottom: 1.2rem;">
+                <label style="display:block; margin-bottom:0.5rem; font-size:0.9rem; color:var(--text-muted);">CPF (Opcional, usado para assinar)</label>
+                <input type="text" name="cpf" value="{{ old('cpf', $user->cpf) }}" class="mask-cpf" placeholder="000.000.000-00" style="width:100%; background:var(--dark-bg); border:1px solid var(--border); padding:0.8rem; border-radius:10px; color:var(--text-main);">
+            </div>
+
+            <div style="margin-bottom: 1.2rem;">
                 <label style="display:block; margin-bottom:0.5rem; font-size:0.9rem; color:var(--text-muted);">Nova Senha (deixe em branco para manter a atual)</label>
                 <input type="password" name="password" style="width:100%; background:var(--dark-bg); border:1px solid var(--border); padding:0.8rem; border-radius:10px; color:var(--text-main);">
             </div>
@@ -40,7 +45,7 @@
                 <label style="display:block; margin-bottom:0.5rem; font-size:0.9rem; color:var(--text-muted);">Nível de Acesso</label>
                 <select name="role" required style="width:100%; background:var(--dark-bg); border:1px solid var(--border); padding:0.8rem; border-radius:10px; color:var(--text-main);">
                     <option value="elaborador" {{ $user->role === 'elaborador' ? 'selected' : '' }}>Secretaria (Elaborador)</option>
-                    <option value="secretario" {{ $user->role === 'secretario' ? 'selected' : '' }}>Secretaria (Diretor/Secretário)</option>
+                    <option value="secretario" {{ $user->role === 'secretario' ? 'selected' : '' }}>Secretaria (Secretário)</option>
                     <option value="gabinete" {{ $user->role === 'gabinete' ? 'selected' : '' }}>Gabinete</option>
                     <option value="compras" {{ $user->role === 'compras' ? 'selected' : '' }}>Setor de Compras</option>
                     <option value="admin" {{ $user->role === 'admin' ? 'selected' : '' }}>Administrador</option>
@@ -48,13 +53,15 @@
             </div>
 
             <div id="secretaria_field" style="margin-bottom: 1.5rem;">
-                <label style="display:block; margin-bottom:0.5rem; font-size:0.9rem; color:var(--text-muted);">Nome da Secretaria</label>
-                <input type="text" name="secretaria_name" value="{{ old('secretaria_name', $user->secretaria_name) }}" placeholder="Ex: Secretaria de Saúde" style="width:100%; background:var(--dark-bg); border:1px solid var(--border); padding:0.8rem; border-radius:10px; color:var(--text-main);">
-                
-                <div style="margin-top: 1.2rem;">
-                    <label style="display:block; margin-bottom:0.5rem; font-size:0.9rem; color:var(--text-muted);">Sigla (Ex: SED, SAU, GAB)</label>
-                    <input type="text" name="secretaria_acronym" value="{{ old('secretaria_acronym', $user->secretaria_acronym) }}" placeholder="Ex: SED" style="width:100%; background:var(--dark-bg); border:1px solid var(--border); padding:0.8rem; border-radius:10px; color:var(--text-main);">
-                </div>
+                <label style="display:block; margin-bottom:0.5rem; font-size:0.9rem; color:var(--text-muted);">Secretaria Vinculada</label>
+                <select name="secretaria_id" style="width:100%; background:var(--dark-bg); border:1px solid var(--border); padding:0.8rem; border-radius:10px; color:var(--text-main);">
+                    <option value="">Selecione uma secretaria...</option>
+                    @foreach($secretarias as $sec)
+                        <option value="{{ $sec->id }}" {{ old('secretaria_id', $user->secretaria_id) == $sec->id ? 'selected' : '' }}>
+                            {{ $sec->name }} ({{ $sec->acronym }})
+                        </option>
+                    @endforeach
+                </select>
             </div>
 
             <div style="display: flex; gap: 1rem;">
@@ -68,4 +75,44 @@
         </form>
     </div>
 </div>
+@endsection
+
+@section('scripts')
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const roleSelect = document.querySelector('select[name="role"]');
+        const secretariaField = document.getElementById('secretaria_field');
+
+        function toggleSecretaria() {
+            const role = roleSelect.value;
+            if (role === 'elaborador' || role === 'secretario') {
+                secretariaField.style.display = 'block';
+            } else {
+                secretariaField.style.display = 'none';
+            }
+        }
+
+        roleSelect.addEventListener('change', toggleSecretaria);
+        toggleSecretaria(); // Run initially
+
+        // CPF Input Mask
+        const cpfInputs = document.querySelectorAll('.mask-cpf');
+        cpfInputs.forEach(input => {
+            input.addEventListener('input', function(e) {
+                let val = e.target.value.replace(/\D/g, '');
+                if (val.length > 11) {
+                    val = val.substring(0, 11);
+                }
+                if (val.length > 9) {
+                    val = val.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
+                } else if (val.length > 6) {
+                    val = val.replace(/^(\d{3})(\d{3})(\d{1,3})$/, '$1.$2.$3');
+                } else if (val.length > 3) {
+                    val = val.replace(/^(\d{3})(\d{1,3})$/, '$1.$2');
+                }
+                e.target.value = val;
+            });
+        });
+    });
+</script>
 @endsection

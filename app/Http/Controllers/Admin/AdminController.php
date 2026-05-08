@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\Secretaria;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
@@ -12,7 +13,7 @@ class AdminController extends Controller
     public function dashboard()
     {
         $usersCount = User::count();
-        $secretariasCount = User::whereIn('role', [User::ROLE_ELABORADOR, User::ROLE_SECRETARIO])->count();
+        $secretariasCount = Secretaria::count();
         $recentUsers = User::latest()->take(5)->get();
         
         return view('admin.dashboard', compact('usersCount', 'secretariasCount', 'recentUsers'));
@@ -20,8 +21,9 @@ class AdminController extends Controller
 
     public function indexUsers()
     {
-        $users = User::all();
-        return view('admin.users.index', compact('users'));
+        $users = User::with('secretaria')->get();
+        $secretarias = Secretaria::all();
+        return view('admin.users.index', compact('users', 'secretarias'));
     }
 
     public function storeUser(Request $request)
@@ -31,17 +33,27 @@ class AdminController extends Controller
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:8',
             'role' => 'required|in:admin,elaborador,secretario,gabinete,compras',
-            'secretaria_name' => 'nullable|string|max:255',
-            'secretaria_acronym' => 'nullable|string|max:20',
+            'secretaria_id' => 'nullable|exists:secretarias,id',
+            'cpf' => 'nullable|string|max:14',
         ]);
+
+        // Enforce: one secretary per secretariat
+        if ($data['role'] === User::ROLE_SECRETARIO && !empty($data['secretaria_id'])) {
+            $exists = User::where('role', User::ROLE_SECRETARIO)
+                ->where('secretaria_id', $data['secretaria_id'])
+                ->exists();
+            if ($exists) {
+                return redirect()->back()->withErrors(['secretaria_id' => 'Esta secretaria já possui um secretário cadastrado!'])->withInput();
+            }
+        }
 
         User::create([
             'name' => $data['name'],
             'email' => $data['email'],
             'password' => Hash::make($data['password']),
             'role' => $data['role'],
-            'secretaria_name' => $data['secretaria_name'],
-            'secretaria_acronym' => $data['secretaria_acronym'],
+            'secretaria_id' => $data['secretaria_id'] ?? null,
+            'cpf' => $data['cpf'] ?? null,
         ]);
 
         return redirect()->back()->with('success', 'Usuário criado com sucesso!');
@@ -49,7 +61,8 @@ class AdminController extends Controller
 
     public function editUser(User $user)
     {
-        return view('admin.users.edit', compact('user'));
+        $secretarias = Secretaria::all();
+        return view('admin.users.edit', compact('user', 'secretarias'));
     }
 
     public function updateUser(Request $request, User $user)
@@ -59,16 +72,27 @@ class AdminController extends Controller
             'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
             'password' => 'nullable|string|min:8',
             'role' => 'required|in:admin,elaborador,secretario,gabinete,compras',
-            'secretaria_name' => 'nullable|string|max:255',
-            'secretaria_acronym' => 'nullable|string|max:20',
+            'secretaria_id' => 'nullable|exists:secretarias,id',
+            'cpf' => 'nullable|string|max:14',
         ]);
+
+        // Enforce: one secretary per secretariat
+        if ($data['role'] === User::ROLE_SECRETARIO && !empty($data['secretaria_id'])) {
+            $exists = User::where('role', User::ROLE_SECRETARIO)
+                ->where('secretaria_id', $data['secretaria_id'])
+                ->where('id', '!=', $user->id)
+                ->exists();
+            if ($exists) {
+                return redirect()->back()->withErrors(['secretaria_id' => 'Esta secretaria já possui um secretário cadastrado!'])->withInput();
+            }
+        }
 
         $updateData = [
             'name' => $data['name'],
             'email' => $data['email'],
             'role' => $data['role'],
-            'secretaria_name' => $data['secretaria_name'],
-            'secretaria_acronym' => $data['secretaria_acronym'],
+            'secretaria_id' => $data['secretaria_id'] ?? null,
+            'cpf' => $data['cpf'] ?? null,
         ];
 
         if (!empty($data['password'])) {

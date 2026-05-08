@@ -132,19 +132,19 @@
 
                 <div>
                     <h4 style="margin-bottom: 1rem; color: var(--accent); font-size: 0.9rem; text-transform: uppercase;">2. Autoridade Responsável (Quem assina)</h4>
-                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">Geralmente o Secretário da pasta ou Diretor Geral.</p>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">Sempre o Secretário da pasta responsável.</p>
                     <div class="form-row-3">
                         <div class="form-group">
                             <label>Nome da Autoridade *</label>
-                            <input type="text" name="responsible_name" required placeholder="Nome completo">
+                            <input type="text" name="responsible_name" value="{{ $secretary?->name ?? '' }}" required placeholder="Nome completo">
                         </div>
                         <div class="form-group">
                             <label>Cargo/Função *</label>
-                            <input type="text" name="responsible_role" required placeholder="Ex: Secretário Municipal">
+                            <input type="text" name="responsible_role" value="{{ $secretary ? 'Secretário Municipal' : '' }}" required placeholder="Ex: Secretário Municipal">
                         </div>
                         <div class="form-group">
                             <label>CPF *</label>
-                            <input type="text" name="responsible_cpf" class="mask-cpf" required placeholder="000.000.000-00">
+                            <input type="text" name="responsible_cpf" value="{{ $secretary?->cpf ?? '' }}" class="mask-cpf" required placeholder="000.000.000-00">
                         </div>
                     </div>
                 </div>

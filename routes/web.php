@@ -18,13 +18,23 @@ Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
 Route::middleware(['auth'])->group(function () {
     
     // Admin
-    Route::middleware(['role:admin'])->prefix('admin')->controller(\App\Http\Controllers\Admin\AdminController::class)->group(function () {
-        Route::get('/dashboard', 'dashboard')->name('admin.dashboard');
-        Route::get('/users', 'indexUsers')->name('admin.users.index');
-        Route::post('/users', 'storeUser')->name('admin.users.store');
-        Route::get('/users/{user}/edit', 'editUser')->name('admin.users.edit');
-        Route::put('/users/{user}', 'updateUser')->name('admin.users.update');
-        Route::delete('/users/{user}', 'destroyUser')->name('admin.users.destroy');
+    Route::middleware(['role:admin'])->prefix('admin')->group(function () {
+        Route::controller(\App\Http\Controllers\Admin\AdminController::class)->group(function () {
+            Route::get('/dashboard', 'dashboard')->name('admin.dashboard');
+            Route::get('/users', 'indexUsers')->name('admin.users.index');
+            Route::post('/users', 'storeUser')->name('admin.users.store');
+            Route::get('/users/{user}/edit', 'editUser')->name('admin.users.edit');
+            Route::put('/users/{user}', 'updateUser')->name('admin.users.update');
+            Route::delete('/users/{user}', 'destroyUser')->name('admin.users.destroy');
+        });
+
+        Route::resource('secretarias', \App\Http\Controllers\Admin\SecretariaController::class)->except(['create', 'show'])->names([
+            'index' => 'admin.secretarias.index',
+            'store' => 'admin.secretarias.store',
+            'edit' => 'admin.secretarias.edit',
+            'update' => 'admin.secretarias.update',
+            'destroy' => 'admin.secretarias.destroy',
+        ]);
     });
 
     // Secretaria (Elaboradores e Secretários)
