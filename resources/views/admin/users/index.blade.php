@@ -51,7 +51,7 @@
                         <td>{{ $user->email }}</td>
                         <td style="font-family: monospace;">{{ $user->cpf ?? '-' }}</td>
                         <td>
-                            <span class="badge {{ $user->role === 'admin' ? 'badge-success' : $user->role === 'secretario' ? 'badge-success' : 'badge-pending' }}">
+                            <span class="badge {{ $user->role === 'admin' ? 'badge-success' : ($user->role === 'secretario' ? 'badge-success' : 'badge-pending') }}">
                                 {{ $user->role === 'secretario' ? 'Secretário' : ($user->role === 'elaborador' ? 'Elaborador' : ucfirst($user->role)) }}
                             </span>
                         </td>
