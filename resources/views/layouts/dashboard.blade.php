@@ -326,6 +326,11 @@
                         <i class="fa-solid fa-building-flag"></i> Gerenciar Secretarias
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a href="{{ route('admin.cache-geometrico.index') }}" class="nav-link {{ request()->routeIs('admin.cache-geometrico.*') ? 'active' : '' }}">
+                        <i class="fa-solid fa-database"></i> Cacheamento Geométrico
+                    </a>
+                </li>
             @elseif(auth()->user()->isSecretaria())
                 <li class="nav-item">
                     <a href="{{ route('secretaria.dashboard') }}" class="nav-link {{ request()->routeIs('secretaria.dashboard') ? 'active' : '' }}">

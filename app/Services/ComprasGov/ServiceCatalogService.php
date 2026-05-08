@@ -140,24 +140,37 @@ class ServiceCatalogService
         $forceGlobal = filter_var($query['force_global'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
         // 1. Tenta local primeiro
-        if ($codigoSubclasse && !$forceGlobal) {
-            $localServices = \App\Models\CatalogService::where('service_code', 'like', $codigoSubclasse . '%')
-                ->limit(200)
-                ->get();
-
-            if ($localServices->isNotEmpty()) {
-                return [
-                    'resultado' => $localServices->map(fn($service) => [
-                        'codigoGrupo' => $service->group_code,
-                        'nomeGrupo' => $service->group_name,
-                        'codigoServico' => (int)$service->service_code,
-                        'descricaoServico' => $service->description,
-                        'statusServico' => (bool)$service->is_active,
-                        'servicoSustentavel' => false
-                    ])->toArray(),
-                    'totalRegistros' => $localServices->count(),
-                    'source' => 'local_db'
-                ];
+        if (!$forceGlobal) {
+            $queryBuilder = \App\Models\CatalogService::query();
+            
+            if ($codigoSubclasse) {
+                $queryBuilder->where('service_code', 'like', $codigoSubclasse . '%');
+            }
+            
+            if ($searchTerm) {
+                $queryBuilder->where(function($q) use ($searchTerm) {
+                    $upperSearch = mb_strtoupper($searchTerm);
+                    $q->whereRaw('UPPER(description) LIKE ?', ['%' . $upperSearch . '%'])
+                      ->orWhereRaw('UPPER(search_aliases) LIKE ?', ['%' . $upperSearch . '%']);
+                });
+            }
+            
+            if ($codigoSubclasse || $searchTerm) {
+                $localServices = $queryBuilder->limit(200)->get();
+                if ($localServices->isNotEmpty()) {
+                    return [
+                        'resultado' => $localServices->map(fn($service) => [
+                            'codigoGrupo' => $service->group_code,
+                            'nomeGrupo' => $service->group_name,
+                            'codigoServico' => (int)$service->service_code,
+                            'descricaoServico' => $service->description,
+                            'statusServico' => (bool)$service->is_active,
+                            'servicoSustentavel' => false
+                        ])->toArray(),
+                        'totalRegistros' => $localServices->count(),
+                        'source' => 'local'
+                    ];
+                }
             }
         }
 

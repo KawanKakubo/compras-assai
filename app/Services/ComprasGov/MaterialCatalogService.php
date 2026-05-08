@@ -108,28 +108,41 @@ class MaterialCatalogService
         $forceGlobal = filter_var($query['force_global'] ?? false, FILTER_VALIDATE_BOOLEAN);
         
         // 1. Tenta local primeiro
-        if ($codigoPdm && !$forceGlobal) {
-            $localItems = \App\Models\CatalogItem::where('pdm_code', $codigoPdm)
-                ->limit(200)
-                ->get();
-
-            if ($localItems->isNotEmpty()) {
-                return [
-                    'resultado' => $localItems->map(fn($item) => [
-                        'codigoGrupo' => $item->group_code,
-                        'nomeGrupo' => $item->group_name,
-                        'codigoClasse' => $item->class_code,
-                        'nomeClasse' => $item->class_name,
-                        'codigoPdm' => $item->pdm_code,
-                        'nomePdm' => $item->pdm_name,
-                        'codigoItem' => (int)$item->item_code,
-                        'descricaoItem' => $item->description,
-                        'statusItem' => (bool)$item->is_active,
-                        'itemSustentavel' => (bool)$item->is_sustainable
-                    ])->toArray(),
-                    'totalRegistros' => $localItems->count(),
-                    'source' => 'local_db'
-                ];
+        if (!$forceGlobal) {
+            $queryBuilder = \App\Models\CatalogItem::query();
+            
+            if ($codigoPdm) {
+                $queryBuilder->where('pdm_code', $codigoPdm);
+            }
+            
+            if ($searchTerm) {
+                $queryBuilder->where(function($q) use ($searchTerm) {
+                    $upperSearch = mb_strtoupper($searchTerm);
+                    $q->whereRaw('UPPER(description) LIKE ?', ['%' . $upperSearch . '%'])
+                      ->orWhereRaw('UPPER(search_aliases) LIKE ?', ['%' . $upperSearch . '%']);
+                });
+            }
+            
+            if ($codigoPdm || $searchTerm) {
+                $localItems = $queryBuilder->limit(200)->get();
+                if ($localItems->isNotEmpty()) {
+                    return [
+                        'resultado' => $localItems->map(fn($item) => [
+                            'codigoGrupo' => $item->group_code,
+                            'nomeGrupo' => $item->group_name,
+                            'codigoClasse' => $item->class_code,
+                            'nomeClasse' => $item->class_name,
+                            'codigoPdm' => $item->pdm_code,
+                            'nomePdm' => $item->pdm_name,
+                            'codigoItem' => (int)$item->item_code,
+                            'descricaoItem' => $item->description,
+                            'statusItem' => (bool)$item->is_active,
+                            'itemSustentavel' => (bool)$item->is_sustainable
+                        ])->toArray(),
+                        'totalRegistros' => $localItems->count(),
+                        'source' => 'local'
+                    ];
+                }
             }
         }
 

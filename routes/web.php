@@ -35,6 +35,13 @@ Route::middleware(['auth'])->group(function () {
             'update' => 'admin.secretarias.update',
             'destroy' => 'admin.secretarias.destroy',
         ]);
+
+        // Cacheamento Geométrico
+        Route::get('/cache-geometrico', [\App\Http\Controllers\Admin\CacheGeometricoController::class, 'index'])->name('admin.cache-geometrico.index');
+        Route::post('/cache-geometrico/sync', [\App\Http\Controllers\Admin\CacheGeometricoController::class, 'sync'])->name('admin.cache-geometrico.sync');
+        Route::get('/cache-geometrico/progress', [\App\Http\Controllers\Admin\CacheGeometricoController::class, 'progress'])->name('admin.cache-geometrico.progress');
+        Route::post('/cache-geometrico/clear', [\App\Http\Controllers\Admin\CacheGeometricoController::class, 'clear'])->name('admin.cache-geometrico.clear');
+        Route::post('/cache-geometrico/upload', [\App\Http\Controllers\Admin\CacheGeometricoController::class, 'upload'])->name('admin.cache-geometrico.upload');
     });
 
     // Secretaria (Elaboradores e Secretários)
