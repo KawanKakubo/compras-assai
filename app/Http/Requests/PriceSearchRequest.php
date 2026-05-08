@@ -16,7 +16,8 @@ class PriceSearchRequest extends FormRequest
         return [
             'pagina' => ['nullable', 'integer', 'min:1'],
             'tamanhoPagina' => ['nullable', 'integer', 'min:10', 'max:500'],
-            'codigoItemCatalogo' => ['required', 'integer', 'min:1'],
+            'codigoItemCatalogo' => ['required_without:codigoServico', 'integer', 'min:1'],
+            'codigoServico' => ['required_without:codigoItemCatalogo', 'integer', 'min:1'],
             'codigoUasg' => ['nullable', 'string', 'max:20'],
             'estado' => ['nullable', 'string', 'size:2'],
             'codigoMunicipio' => ['nullable', 'integer', 'min:1'],
@@ -27,6 +28,7 @@ class PriceSearchRequest extends FormRequest
             'idCompra' => ['nullable', 'string', 'max:32'],
             'dataCompraInicio' => ['nullable', 'date_format:Y-m-d'],
             'dataCompraFim' => ['nullable', 'date_format:Y-m-d'],
+            'descricao' => ['nullable', 'string'],
         ];
     }
 }

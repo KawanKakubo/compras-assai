@@ -141,42 +141,93 @@ class ServiceCatalogService
 
         // 1. Tenta local primeiro
         if (!$forceGlobal) {
-            $queryBuilder = \App\Models\CatalogService::query();
-            
-            if ($codigoSubclasse) {
-                $queryBuilder->where('service_code', 'like', $codigoSubclasse . '%');
-            }
-            
-            if ($searchTerm) {
-                $queryBuilder->where(function($q) use ($searchTerm) {
-                    $upperSearch = mb_strtoupper($searchTerm);
-                    $q->whereRaw('UPPER(description) LIKE ?', ['%' . $upperSearch . '%'])
-                      ->orWhereRaw('UPPER(search_aliases) LIKE ?', ['%' . $upperSearch . '%']);
-                });
-            }
+            $localServices = collect();
             
             if ($codigoSubclasse || $searchTerm) {
-                $localServices = $queryBuilder->limit(200)->get();
-                if ($localServices->isNotEmpty()) {
-                    return [
-                        'resultado' => $localServices->map(fn($service) => [
-                            'codigoGrupo' => $service->group_code,
-                            'nomeGrupo' => $service->group_name,
-                            'codigoServico' => (int)$service->service_code,
-                            'descricaoServico' => $service->description,
-                            'statusServico' => (bool)$service->is_active,
-                            'servicoSustentavel' => false
-                        ])->toArray(),
-                        'totalRegistros' => $localServices->count(),
-                        'source' => 'local'
-                    ];
+                // Tenta buscar com subclasse (5 dígitos)
+                $queryBuilder = \App\Models\CatalogService::query();
+                if ($codigoSubclasse) {
+                    $queryBuilder->where('service_code', 'like', $codigoSubclasse . '%');
                 }
+                if ($searchTerm) {
+                    $queryBuilder->where(function($q) use ($searchTerm) {
+                        $upperSearch = mb_strtoupper($searchTerm);
+                        $q->whereRaw('UPPER(description) LIKE ?', ['%' . $upperSearch . '%'])
+                          ->orWhereRaw('UPPER(search_aliases) LIKE ?', ['%' . $upperSearch . '%']);
+                    });
+                }
+                $localServices = $queryBuilder->limit(200)->get();
+                
+                // Se não achou e temos codigoSubclasse, tenta pela classe (4 dígitos)
+                if ($localServices->isEmpty() && $codigoSubclasse) {
+                    $classCode = substr((string)$codigoSubclasse, 0, 4);
+                    $queryBuilder = \App\Models\CatalogService::query()->where('service_code', 'like', $classCode . '%');
+                    if ($searchTerm) {
+                        $queryBuilder->where(function($q) use ($searchTerm) {
+                            $upperSearch = mb_strtoupper($searchTerm);
+                            $q->whereRaw('UPPER(description) LIKE ?', ['%' . $upperSearch . '%']);
+                        });
+                    }
+                    $localServices = $queryBuilder->limit(200)->get();
+                }
+                
+                // Se ainda não achou e temos codigoSubclasse, tenta pelo grupo (3 dígitos)
+                if ($localServices->isEmpty() && $codigoSubclasse) {
+                    $groupCode = substr((string)$codigoSubclasse, 0, 3);
+                    $queryBuilder = \App\Models\CatalogService::query()->where('service_code', 'like', $groupCode . '%');
+                    if ($searchTerm) {
+                        $queryBuilder->where(function($q) use ($searchTerm) {
+                            $upperSearch = mb_strtoupper($searchTerm);
+                            $q->whereRaw('UPPER(description) LIKE ?', ['%' . $upperSearch . '%']);
+                        });
+                    }
+                    $localServices = $queryBuilder->limit(200)->get();
+                }
+            }
+
+            if ($localServices->isNotEmpty()) {
+                return [
+                    'resultado' => $localServices->map(fn($service) => [
+                        'codigoGrupo' => $service->group_code,
+                        'nomeGrupo' => $service->group_name,
+                        'codigoServico' => (int)$service->service_code,
+                        'descricaoServico' => $service->description,
+                        'statusServico' => (bool)$service->is_active,
+                        'servicoSustentavel' => false
+                    ])->toArray(),
+                    'totalRegistros' => $localServices->count(),
+                    'source' => 'local'
+                ];
             }
         }
 
         // 2. Busca na API
         unset($query['force_global']);
         $data = $this->client->get('/modulo-servico/6_consultarItemServico', $query);
+
+        // Fallback progressivo de hierarquia para serviços se o resultado for vazio e tiver codigoSubclasse
+        if (empty($data['resultado']) && empty($data['error']) && $codigoSubclasse) {
+            // Se a busca por subclasse (5 dígitos) deu vazia, tenta por classe (4 dígitos)
+            $classCode = substr((string)$codigoSubclasse, 0, 4);
+            Log::info("Fallback Service Items: Nenhum resultado para subclasse {$codigoSubclasse}. Tentando por classe {$classCode}");
+            
+            $fallbackQuery = $query;
+            unset($fallbackQuery['codigoSubclasse']);
+            $fallbackQuery['codigoClasse'] = (int)$classCode;
+            
+            $data = $this->client->get('/modulo-servico/6_consultarItemServico', $fallbackQuery);
+            
+            // Se ainda assim for vazio, tenta por grupo (3 dígitos)
+            if (empty($data['resultado']) && empty($data['error'])) {
+                $groupCode = substr((string)$codigoSubclasse, 0, 3);
+                Log::info("Fallback Service Items: Nenhum resultado para classe {$classCode}. Tentando por grupo {$groupCode}");
+                
+                unset($fallbackQuery['codigoClasse']);
+                $fallbackQuery['codigoGrupo'] = (int)$groupCode;
+                
+                $data = $this->client->get('/modulo-servico/6_consultarItemServico', $fallbackQuery);
+            }
+        }
 
         // Fallback inteligente para itens de serviço (Erro JPA no filtro de Subclasse)
         if (!empty($data['error']) && str_contains($data['error'], 'EntityManager') && isset($query['codigoSubclasse'])) {

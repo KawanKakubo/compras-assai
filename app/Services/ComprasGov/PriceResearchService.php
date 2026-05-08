@@ -207,70 +207,101 @@ class PriceResearchService
         $descricao = $query['descricao'] ?? '';
 
         if ($itemCode > 0) {
-            // 1. Tenta a API Oficial de Preços Praticados (Dados Abertos)
-            // Filtramos por PR (Paraná) para ser mais relevante, e pegamos o último ano
+            // 1. Tenta a API Oficial de Preços Praticados (Dados Abertos) no Paraná (PR)
             $apiQuery = [
                 'codigoItemCatalogo' => $itemCode,
-                'dataCompraInicio' => now()->subYear()->format('Y-m-d'),
-                'dataCompraFim' => now()->format('Y-m-d'),
                 'estado' => 'PR',
-                'tamanhoPagina' => 50
+                'tamanhoPagina' => 100
             ];
 
+            $govResult = $this->client->get('/modulo-pesquisa-preco/1_consultarMaterial', $apiQuery);
+
+            if (!empty($govResult['resultado']) && count($govResult['resultado']) >= 3) {
+                return [
+                    'resultado' => array_map(fn($p) => [
+                        'valorUnitario' => (float) ($p['precoUnitario'] ?? 0),
+                        'dataCompra' => $p['dataCompra'] ?? null,
+                        'orgao' => $p['nomeOrgao'] ?? $p['nomeUasg'] ?? 'Órgão Público',
+                        'unidadeMedida' => $p['siglaUnidadeMedida'] ?? $p['siglaUnidadeFornecimento'] ?? 'UN'
+                    ], $govResult['resultado']),
+                    'totalRegistros' => $govResult['totalRegistros'] ?? count($govResult['resultado']),
+                    'fonte' => 'Dados Abertos: Preços Praticados PR (CATMAT)',
+                    'nivel' => 1
+                ];
+            }
+
+            // 2. Se PR não retornou dados suficientes, busca a nível Nacional (sem filtro de estado)
+            unset($apiQuery['estado']);
             $govResult = $this->client->get('/modulo-pesquisa-preco/1_consultarMaterial', $apiQuery);
 
             if (!empty($govResult['resultado'])) {
                 return [
                     'resultado' => array_map(fn($p) => [
-                        'valorUnitario' => $p['valorUnitario'],
-                        'dataCompra' => $p['dataCompra'],
-                        'orgao' => $p['nomeOrgao'] ?? 'Órgão Público',
-                        'unidadeMedida' => $p['unidadeMedida'] ?? 'UN'
+                        'valorUnitario' => (float) ($p['precoUnitario'] ?? 0),
+                        'dataCompra' => $p['dataCompra'] ?? null,
+                        'orgao' => $p['nomeOrgao'] ?? $p['nomeUasg'] ?? 'Órgão Público',
+                        'unidadeMedida' => $p['siglaUnidadeMedida'] ?? $p['siglaUnidadeFornecimento'] ?? 'UN'
                     ], $govResult['resultado']),
                     'totalRegistros' => $govResult['totalRegistros'] ?? count($govResult['resultado']),
-                    'fonte' => 'Dados Abertos: Preços Praticados (CATMAT)',
+                    'fonte' => 'Dados Abertos: Preços Praticados Nacional (CATMAT)',
                     'nivel' => 1
                 ];
             }
         }
 
-        // 2. Fallback para Mineração PNCP ou Heurística
+        // 3. Fallback para Mineração PNCP ou Heurística
         return $this->generateHybridPriceData($itemCode, $descricao, false);
     }
 
     public function servicePrices(array $query = []): array
     {
-        $serviceCode = (int) ($query['codigoServico'] ?? 0);
+        $serviceCode = (int) ($query['codigoServico'] ?? $query['codigoItemCatalogo'] ?? 0);
         $descricao = $query['descricao'] ?? '';
 
         if ($serviceCode > 0) {
-            // 1. Tenta a API Oficial de Preços Praticados (Dados Abertos)
+            // 1. Tenta a API Oficial de Preços Praticados (Dados Abertos) no Paraná (PR)
             $apiQuery = [
                 'codigoItemCatalogo' => $serviceCode,
-                'dataCompraInicio' => now()->subYear()->format('Y-m-d'),
-                'dataCompraFim' => now()->format('Y-m-d'),
                 'estado' => 'PR',
-                'tamanhoPagina' => 50
+                'tamanhoPagina' => 100
             ];
 
+            $govResult = $this->client->get('/modulo-pesquisa-preco/3_consultarServico', $apiQuery);
+
+            if (!empty($govResult['resultado']) && count($govResult['resultado']) >= 3) {
+                return [
+                    'resultado' => array_map(fn($p) => [
+                        'valorUnitarioHomologado' => (float) ($p['precoUnitario'] ?? 0),
+                        'dataCompra' => $p['dataCompra'] ?? null,
+                        'orgao' => $p['nomeOrgao'] ?? $p['nomeUasg'] ?? 'Órgão Público',
+                        'unidadeMedida' => $p['siglaUnidadeMedida'] ?? 'SV'
+                    ], $govResult['resultado']),
+                    'totalRegistros' => $govResult['totalRegistros'] ?? count($govResult['resultado']),
+                    'fonte' => 'Dados Abertos: Preços Praticados PR (CATSER)',
+                    'nivel' => 1
+                ];
+            }
+
+            // 2. Se PR não retornou dados suficientes, busca a nível Nacional (sem filtro de estado)
+            unset($apiQuery['estado']);
             $govResult = $this->client->get('/modulo-pesquisa-preco/3_consultarServico', $apiQuery);
 
             if (!empty($govResult['resultado'])) {
                 return [
                     'resultado' => array_map(fn($p) => [
-                        'valorUnitarioHomologado' => $p['valorUnitario'],
-                        'dataCompra' => $p['dataCompra'],
-                        'orgao' => $p['nomeOrgao'] ?? 'Órgão Público',
-                        'unidadeMedida' => $p['unidadeMedida'] ?? 'SV'
+                        'valorUnitarioHomologado' => (float) ($p['precoUnitario'] ?? 0),
+                        'dataCompra' => $p['dataCompra'] ?? null,
+                        'orgao' => $p['nomeOrgao'] ?? $p['nomeUasg'] ?? 'Órgão Público',
+                        'unidadeMedida' => $p['siglaUnidadeMedida'] ?? 'SV'
                     ], $govResult['resultado']),
                     'totalRegistros' => $govResult['totalRegistros'] ?? count($govResult['resultado']),
-                    'fonte' => 'Dados Abertos: Preços Praticados (CATSER)',
+                    'fonte' => 'Dados Abertos: Preços Praticados Nacional (CATSER)',
                     'nivel' => 1
                 ];
             }
         }
 
-        // 2. Fallback para Mineração PNCP ou Heurística
+        // 3. Fallback para Mineração PNCP ou Heurística
         return $this->generateHybridPriceData($serviceCode, $descricao, true);
     }
 }

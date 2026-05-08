@@ -177,10 +177,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ── Items Logic (Dynamic Addition & Deletion) ───────────────────────────
-    let itemCounter = 0;
-    
     function createItemCard(type = 'material') {
-        const index = itemCounter++;
+        const index = itemsContainer.querySelectorAll('.item-card').length;
         const isMaterial = type === 'material';
         
         const card = document.createElement('div');
@@ -273,10 +271,34 @@ document.addEventListener('DOMContentLoaded', () => {
         setupHierarchyNavigation(card, type);
     }
     
+    function reorderItemCards() {
+        const cards = itemsContainer.querySelectorAll('.item-card');
+        cards.forEach((card, index) => {
+            const type = card.dataset.type;
+            const isMaterial = type === 'material';
+            card.dataset.index = index;
+            
+            // 1. Update header label
+            const numberLabel = card.querySelector('.item-number');
+            if (numberLabel) {
+                numberLabel.textContent = `Item #${index + 1} (${isMaterial ? 'Material' : 'Serviço'})`;
+            }
+            
+            // 2. Update all inputs, textareas, selects name attribute index
+            const inputs = card.querySelectorAll('input, textarea, select');
+            inputs.forEach(input => {
+                if (input.name) {
+                    input.name = input.name.replace(/items\[\d+\]/, `items[${index}]`);
+                }
+            });
+        });
+    }
+
     function setupItemCardListeners(card, index, type) {
         // Remove item
         card.querySelector('.btn-remove-item').addEventListener('click', () => {
             card.remove();
+            reorderItemCards();
             calculateTotalsAndFraming();
         });
         
@@ -434,6 +456,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const results = data.resultado || [];
 
+            if (results.length === 0) {
+                stepDiv.remove();
+                loadFinalItems(card, type, parentCode, itemContainer, itemList);
+                return;
+            }
+
             select.innerHTML = '<option value="">Selecione...</option>';
             results.forEach(item => {
                 const opt = document.createElement('option');
@@ -571,12 +599,11 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             card.querySelector('.item-unit').value = "SV"; // Serviço padrão
         }
-        
         // Automatically trigger price research
-        fetchPricesForItem(code, type, card);
+        fetchPricesForItem(code, type, card, true);
     }
     
-    async function fetchPricesForItem(code, type, card) {
+    async function fetchPricesForItem(code, type, card, forceUpdatePrice = false) {
         const metaContainer = card.querySelector('.item-price-meta');
         const unitValInput = card.querySelector('.item-unit-value');
         
@@ -631,7 +658,7 @@ document.addEventListener('DOMContentLoaded', () => {
             card.querySelector('.item-price-sample').value = prices.length;
             
             // Set value input
-            if (!unitValInput.value) {
+            if (forceUpdatePrice || !unitValInput.value || parseFloat(unitValInput.value) === 0) {
                 unitValInput.value = median.toFixed(2);
                 unitValInput.dispatchEvent(new Event('input'));
             }
