@@ -14,10 +14,13 @@ class DashboardController extends Controller
         $user = Auth::user();
         
         // Se for um usuário de secretaria, ele vê todas as solicitações daquela secretaria
-        // assumindo que 'secretaria_acronym' ou 'secretaria_name' define o grupo.
         $query = ProcurementRequest::query();
         
-        if ($user->secretaria_acronym) {
+        if ($user->secretaria_id) {
+            $query->whereHas('user', function($q) use ($user) {
+                $q->where('secretaria_id', $user->secretaria_id);
+            });
+        } elseif ($user->secretaria_acronym) {
             $query->whereHas('user', function($q) use ($user) {
                 $q->where('secretaria_acronym', $user->secretaria_acronym);
             });
