@@ -61,6 +61,9 @@ class StorePlanningModuleRequest extends FormRequest
             'items.*.catmat_class' => ['nullable', 'string', 'max:255'],
             'items.*.catmat_pdm' => ['nullable', 'string', 'max:255'],
             'items.*.description' => ['required', 'string'],
+            'items.*.catmat_description' => ['nullable', 'string'],
+            'items.*.detailed_description' => ['nullable', 'string'],
+            'items.*.specification_justification' => ['nullable', 'string', 'required_with:items.*.detailed_description'],
             'items.*.unit' => ['nullable', 'string', 'max:32'],
             'items.*.quantity' => ['required', 'numeric', 'min:0.0001'],
             'items.*.unit_value' => ['nullable', 'numeric', 'min:0'],
@@ -137,6 +140,7 @@ class StorePlanningModuleRequest extends FormRequest
             'items.*.quantity.required' => 'Informe a quantidade de cada item.',
             'study.viability_decision.required' => 'Selecione a decisão de viabilidade.',
             'priority_justification.required_if' => 'A justificativa é obrigatória quando a prioridade é Alta.',
+            'items.*.specification_justification.required_with' => 'A justificativa técnica é obrigatória quando especificações detalhadas são adicionadas para evitar direcionamento de marca.',
         ];
     }
 }

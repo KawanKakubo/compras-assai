@@ -173,4 +173,48 @@ class ModuleOnePlanningTest extends TestCase
         $response->assertOk();
         $response->assertHeader('content-type', 'application/octet-stream');
     }
+
+    public function test_module_one_submission_with_custom_specs_fails_without_justification(): void
+    {
+        $user = $this->createElaboradorUser();
+        $payload = $this->getValidPayload();
+        
+        // Add detailed specification but leave justification blank
+        $payload['items'][0]['detailed_description'] = 'Notebook com processador i7 de última geração, 32GB RAM e SSD de 1TB.';
+        $payload['items'][0]['specification_justification'] = null;
+
+        $response = $this->actingAs($user)->postJson(route('planning.module-one.store'), $payload);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['items.0.specification_justification']);
+    }
+
+    public function test_module_one_submission_with_custom_specs_succeeds_with_justification(): void
+    {
+        $user = $this->createElaboradorUser();
+        $payload = $this->getValidPayload();
+        
+        // Add detailed specification AND justification
+        $payload['items'][0]['catmat_description'] = 'MICROCOMPUTADOR PORTÁTIL (NOTEBOOK)';
+        $payload['items'][0]['detailed_description'] = 'Notebook com processador i7 de última geração, 32GB RAM e SSD de 1TB.';
+        $payload['items'][0]['specification_justification'] = 'A necessidade de 32GB de memória RAM e SSD de alta velocidade justifica-se pela utilização de softwares pesados de geoprocessamento e banco de dados pela equipe técnica.';
+
+        $response = $this->actingAs($user)->post(route('planning.module-one.store'), $payload);
+
+        $response->assertRedirect();
+
+        // Verify databases has customization fields stored correctly
+        $item = ProcurementItem::query()->firstOrFail();
+        $this->assertSame('MICROCOMPUTADOR PORTÁTIL (NOTEBOOK)', $item->catmat_description);
+        $this->assertSame('Notebook com processador i7 de última geração, 32GB RAM e SSD de 1TB.', $item->detailed_description);
+        $this->assertSame('A necessidade de 32GB de memória RAM e SSD de alta velocidade justifica-se pela utilização de softwares pesados de geoprocessamento e banco de dados pela equipe técnica.', $item->specification_justification);
+
+        // Verify document downloading works with compiled descriptions
+        $request = ProcurementRequest::query()->firstOrFail();
+        $responseSd = $this->actingAs($user)->get(route('planning.module-one.download-sd', $request));
+        $responseSd->assertOk();
+
+        $responseEtp = $this->actingAs($user)->get(route('planning.module-one.download-etp', $request));
+        $responseEtp->assertOk();
+    }
 }

@@ -33,6 +33,9 @@ class ProcurementItem extends Model
         'notes',
         'memory_calculation',
         'metadata',
+        'catmat_description',
+        'detailed_description',
+        'specification_justification',
     ];
 
     protected function casts(): array

@@ -48,7 +48,13 @@ class DocumentTemplateService
                 '{{ funcao_secretario }}' => $request->responsible_role ?: 'Não informado',
             ],
             'items' => $request->items->map(fn($item) => [
-                'description' => $item->description,
+                'description' => sprintf(
+                    "[%s - %s] %s%s",
+                    $item->item_type === 'service' ? 'CATSER' : 'CATMAT',
+                    $item->catalog_code,
+                    $item->catmat_description ?: $item->description,
+                    $item->detailed_description ? "\n• Especificações Detalhadas: " . $item->detailed_description . "\n• Justificativa Técnica: " . $item->specification_justification : ''
+                ),
                 'quantity' => $item->quantity,
                 'unit' => $item->unit,
                 'unit_value' => $item->unit_value,
@@ -101,7 +107,24 @@ class DocumentTemplateService
         
         $parcelamento = $study?->parceling_justification ?: 'O objeto não será parcelado em lotes ou itens separados de forma a comprometer a economia de escala, a padronização e a eficiência administrativa do fornecimento. A contratação unificada é a mais adequada para assegurar a responsabilidade única pelo adimplemento da obrigação.';
         
-        $descricaoSolucao = $study?->chosen_solution ?: $request->object_summary;
+        $descricaoSolucao = $study?->chosen_solution;
+        if (empty($descricaoSolucao) || $descricaoSolucao === $request->object_summary) {
+            $solucoes = [];
+            foreach ($request->items as $idx => $item) {
+                $itemLabel = $item->item_type === 'service' ? 'contratação de ' . ($item->catmat_description ?: $item->description) : 'aquisição de ' . ($item->catmat_description ?: $item->description);
+                $codeLabel = $item->item_type === 'service' ? 'CATSER' : 'CATMAT';
+                
+                $sentence = "A solução escolhida compreende a " . $itemLabel . ", classificado sob o código " . $codeLabel . " " . $item->catalog_code . ", conforme especificações detalhadas no anexo técnico";
+                
+                if ($item->detailed_description) {
+                    $sentence .= ", com o detalhamento de: " . $item->detailed_description . ", por se tratar da categoria que melhor atende aos requisitos de justificativa técnica: \"" . $item->specification_justification . "\".";
+                } else {
+                    $sentence .= ", por se tratar da categoria que atende perfeitamente às necessidades operacionais e ao interesse público do órgão requisitante.";
+                }
+                $solucoes[] = "Item " . ($idx + 1) . ": " . $sentence;
+            }
+            $descricaoSolucao = implode("\n", $solucoes);
+        }
         
         $resultadosPretendidos = $study?->expected_results ?: 'Espera-se com esta contratação obter a melhoria contínua na prestação dos serviços públicos da Secretaria Requisitante, garantindo o suprimento tempestivo e regular das necessidades operacionais, com otimização dos recursos financeiros aplicados e total transparência.';
 
@@ -130,7 +153,13 @@ class DocumentTemplateService
                 '{{ funcao_secretario }}' => $request->responsible_role ?: 'Não informado',
             ],
             'items' => $request->items->map(fn($item) => [
-                'description' => $item->description,
+                'description' => sprintf(
+                    "[%s - %s] %s%s",
+                    $item->item_type === 'service' ? 'CATSER' : 'CATMAT',
+                    $item->catalog_code,
+                    $item->catmat_description ?: $item->description,
+                    $item->detailed_description ? "\n• Especificações Detalhadas: " . $item->detailed_description . "\n• Justificativa Técnica: " . $item->specification_justification : ''
+                ),
                 'quantity' => $item->quantity,
                 'unit' => $item->unit,
                 'unit_value' => $item->unit_value,

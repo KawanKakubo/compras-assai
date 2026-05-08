@@ -226,10 +226,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             </div>
 
-            <div class="form-row-3">
+            <input type="hidden" name="items[${index}][description]" class="item-description">
+
+            <div class="form-row-3" style="row-gap: 15px;">
                 <div class="form-group" style="grid-column: span 3;">
-                    <label>Descrição Detalhada *</label>
-                    <textarea name="items[${index}][description]" class="item-description" required rows="2" placeholder="A descrição será preenchida automaticamente ao selecionar o item..."></textarea>
+                    <label style="color: var(--success);"><i class="ph ph-shield-check"></i> Descrição CATMAT/CATSER (Imutável)</label>
+                    <textarea name="items[${index}][catmat_description]" class="item-catmat-description" readonly style="background: var(--bg-body, #f8f9fa); opacity: 0.85; font-style: italic;" rows="2" placeholder="A descrição será preenchida automaticamente ao selecionar o item..."></textarea>
+                </div>
+                <div class="form-group" style="grid-column: span 3;">
+                    <label><i class="ph ph-pencil-simple-line"></i> Especificações Detalhadas (Opcional)</label>
+                    <div class="hint">Adicione especificidades locais (Ex: cor, marca recomendada, requisitos adicionais).</div>
+                    <textarea name="items[${index}][detailed_description]" class="item-detailed-description" rows="2" placeholder="Ex: Placa de vídeo dedicada 8GB VRAM, processador i7..."></textarea>
+                </div>
+                <div class="form-group item-justification-container" style="grid-column: span 3; display: none;">
+                    <label style="color: var(--warning);"><i class="ph ph-warning-circle"></i> Justificativa Técnica para Requisitos Adicionais (Obrigatória)</label>
+                    <div class="hint" style="color: var(--text-muted);">A lei proíbe o direcionamento de marca. Justifique por que estas especificações adicionais são de interesse público.</div>
+                    <textarea name="items[${index}][specification_justification]" class="item-specification-justification" rows="2" placeholder="Justifique tecnicamente a necessidade dessas especificações para o interesse público..."></textarea>
                 </div>
                 <div class="form-group">
                     <label>Unidade *</label>
@@ -282,6 +294,23 @@ document.addEventListener('DOMContentLoaded', () => {
         
         qtyInput.addEventListener('input', calcTotal);
         valInput.addEventListener('input', calcTotal);
+
+        // Toggle justification depending on detailed description
+        const detailedDescInput = card.querySelector('.item-detailed-description');
+        const justificationContainer = card.querySelector('.item-justification-container');
+        const justificationInput = card.querySelector('.item-specification-justification');
+        
+        detailedDescInput.addEventListener('input', () => {
+            const hasDetails = detailedDescInput.value.trim().length > 0;
+            if (hasDetails) {
+                justificationContainer.style.display = 'block';
+                justificationInput.setAttribute('required', 'required');
+            } else {
+                justificationContainer.style.display = 'none';
+                justificationInput.removeAttribute('required');
+                justificationInput.value = '';
+            }
+        });
     }
 
     // Simple in-memory cache for taxonomy to avoid redundant server hits
@@ -523,6 +552,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Populate fields
         card.querySelector('.item-catalog-code').value = code;
         card.querySelector('.item-description').value = desc;
+        card.querySelector('.item-catmat-description').value = desc;
         card.querySelector('.item-sustainable').value = item.itemSustentavel ? 1 : 0;
         
         // Default values
