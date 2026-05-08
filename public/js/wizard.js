@@ -215,6 +215,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     <label><i class="ph ph-package"></i> Selecione o Item Final</label>
                     <div class="item-selection-list"></div>
                 </div>
+                <div class="not-found-manual-container" style="margin-top: 15px; padding: 12px; background: rgba(255,255,255,0.03); border: 1px dashed rgba(255,255,255,0.15); border-radius: 6px; display: flex; align-items: center; justify-content: space-between;">
+                    <a href="#" class="btn-not-found-manual" style="color: var(--accent, #3b82f6); text-decoration: none; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; font-weight: 500; transition: color 0.2s;">
+                        <i class="ph ph-question" style="font-size: 16px;"></i> Não encontrei o item na base nacional (Inserir Manualmente)
+                    </a>
+                </div>
             </div>
 
             <div class="form-row" style="grid-template-columns: 1fr;">
@@ -229,7 +234,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="form-row-3" style="row-gap: 15px;">
                 <div class="form-group" style="grid-column: span 3;">
                     <label style="color: var(--success);"><i class="ph ph-shield-check"></i> Descrição CATMAT/CATSER (Imutável)</label>
-                    <textarea name="items[${index}][catmat_description]" class="item-catmat-description" readonly style="background: var(--bg-body, #f8f9fa); opacity: 0.85; font-style: italic;" rows="2" placeholder="A descrição será preenchida automaticamente ao selecionar o item..."></textarea>
+                    <textarea name="items[${index}][catmat_description]" class="item-catmat-description" readonly style="background: var(--bg-primary, #f8fafc); opacity: 0.85; font-style: italic;" rows="2" placeholder="A descrição será preenchida automaticamente ao selecionar o item..."></textarea>
                 </div>
                 <div class="form-group" style="grid-column: span 3;">
                     <label><i class="ph ph-pencil-simple-line"></i> Especificações Detalhadas (Opcional)</label>
@@ -317,12 +322,86 @@ document.addEventListener('DOMContentLoaded', () => {
         qtyInput.addEventListener('input', calcTotal);
         valInput.addEventListener('input', calcTotal);
 
-        // Toggle justification depending on detailed description
+        // Toggle justification depending on detailed description and manual entry mode
         const detailedDescInput = card.querySelector('.item-detailed-description');
         const justificationContainer = card.querySelector('.item-justification-container');
         const justificationInput = card.querySelector('.item-specification-justification');
+        const btnManual = card.querySelector('.btn-not-found-manual');
+        const catalogCodeInput = card.querySelector('.item-catalog-code');
+        const catmatDescInput = card.querySelector('.item-catmat-description');
+        const stepsContainer = card.querySelector('.hierarchy-steps-container');
+        const itemSelectionContainer = card.querySelector('.item-selection-container');
+        const initialStep = card.querySelector('.hierarchy-step[data-level="0"]');
+
+        if (btnManual) {
+            btnManual.addEventListener('click', (e) => {
+                e.preventDefault();
+                
+                const isManual = card.dataset.manualMode === 'true';
+                
+                if (!isManual) {
+                    // Activate manual entry mode
+                    card.dataset.manualMode = 'true';
+                    btnManual.innerHTML = `<i class="ph ph-arrow-left"></i> Voltar para busca no catálogo nacional`;
+                    btnManual.style.color = 'var(--warning)';
+                    
+                    // Hide taxonomy elements
+                    initialStep.style.display = 'none';
+                    stepsContainer.style.display = 'none';
+                    itemSelectionContainer.style.display = 'none';
+                    
+                    // Enable editing of description field
+                    catmatDescInput.removeAttribute('readonly');
+                    catmatDescInput.style.background = 'transparent';
+                    catmatDescInput.style.opacity = '1';
+                    catmatDescInput.style.fontStyle = 'normal';
+                    catmatDescInput.setAttribute('required', 'required');
+                    catmatDescInput.placeholder = 'Digite a descrição simplificada do item aqui (Ex: Drone de mapeamento térmico)';
+                    catmatDescInput.value = '';
+                    
+                    // Set catalog code to provisional
+                    catalogCodeInput.value = '99999-PROVISORIO';
+                    
+                    // Force display justification container and write the legal justification warning
+                    justificationContainer.style.display = 'block';
+                    justificationInput.setAttribute('required', 'required');
+                    justificationInput.value = 'Item não localizado nos catálogos oficiais. Utilizada descrição técnica detalhada para fins de balizamento de mercado conforme Art. 41 da Lei 14.133/21.';
+                } else {
+                    // Deactivate manual entry mode (return to catalog search)
+                    card.dataset.manualMode = 'false';
+                    btnManual.innerHTML = `<i class="ph ph-question"></i> Não encontrei o item na base nacional (Inserir Manualmente)`;
+                    btnManual.style.color = 'var(--accent)';
+                    
+                    // Show standard taxonomy steps
+                    initialStep.style.display = 'block';
+                    stepsContainer.style.display = 'block';
+                    // itemSelectionContainer will be shown conditionally when user navigates again
+                    
+                    // Restore read-only description
+                    catmatDescInput.setAttribute('readonly', 'readonly');
+                    catmatDescInput.style.background = 'var(--bg-primary, #f8fafc)';
+                    catmatDescInput.style.opacity = '0.85';
+                    catmatDescInput.style.fontStyle = 'italic';
+                    catmatDescInput.removeAttribute('required');
+                    catmatDescInput.placeholder = 'A descrição será preenchida automaticamente ao selecionar o item...';
+                    catmatDescInput.value = '';
+                    
+                    // Reset fields
+                    catalogCodeInput.value = '';
+                    detailedDescInput.value = '';
+                    justificationInput.value = '';
+                    justificationContainer.style.display = 'none';
+                    justificationInput.removeAttribute('required');
+                }
+            });
+        }
         
         detailedDescInput.addEventListener('input', () => {
+            const isManual = card.dataset.manualMode === 'true';
+            if (isManual) {
+                // If in manual mode, the justification is always required and contains the legal warning
+                return;
+            }
             const hasDetails = detailedDescInput.value.trim().length > 0;
             if (hasDetails) {
                 justificationContainer.style.display = 'block';
@@ -789,9 +868,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── Init ────────────────────────────────────────────────────────────────
     btnAddItem.addEventListener('click', () => createItemCard('material'));
     document.getElementById('btn-add-service').addEventListener('click', () => createItemCard('service'));
-    
-    // Start with one item
-    createItemCard('material');
+    // Start with empty items list (user must click to add either Material or Service)
     setupConditionals();
     updateWizard();
 });
