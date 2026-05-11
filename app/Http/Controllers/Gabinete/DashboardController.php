@@ -40,10 +40,10 @@ class DashboardController extends Controller
     public function approve($id)
     {
         $procurementRequest = ProcurementRequest::findOrFail($id);
-        $procurementRequest->status = ProcurementRequest::STATUS_APROVADO_COMPRAS;
-        $procurementRequest->save();
-
-        return redirect()->back()->with('success', 'Solicitação aprovada e encaminhada ao Compras!');
+        
+        // Redirect to the show page so they can review and sign the document
+        return redirect()->route('planning.module-one.show', $procurementRequest)
+            ->with('info', 'Por favor, revise os detalhes e clique em "Aprovar e Assinar" para concluir a aprovação desta demanda.');
     }
 
     public function deny(Request $request, $id)

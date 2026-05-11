@@ -4,154 +4,201 @@ namespace App\Http\Controllers\Planning;
 
 use App\Http\Controllers\Controller;
 use App\Models\Planning\ProcurementRequest;
-use App\Services\AssinadorService;
+use App\Services\LibreSignService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Storage;
 
 class SignatureController extends Controller
 {
-    protected AssinadorService $assinador;
+    protected LibreSignService $libresign;
 
-    public function __construct(AssinadorService $assinador)
+    public function __construct(LibreSignService $libresign)
     {
-        $this->assinador = $assinador;
+        $this->libresign = $libresign;
     }
 
     /**
-     * Passo 1 e 2: Obtém JWT do Gov e solicita desafio MFA no Assinador.
+     * Initializes a signature request with LibreSign.
      */
-    public function requestMfa(ProcurementRequest $procurementRequest)
+    public function initializeSignature(ProcurementRequest $procurementRequest)
     {
-        // BYPASS para desenvolvimento
-        if (config('assinador.bypass') && app()->environment('local')) {
+        $user = auth()->user();
+
+        // 1. Authorization checks based on status and user role
+        if ($procurementRequest->status === ProcurementRequest::STATUS_RASCUNHO && !$user->isElaborador()) {
             return response()->json([
-                'success' => true,
-                'challenge_id' => 'mock_challenge_' . $procurementRequest->id,
-                'message' => '[MOCK] Modo de teste ativado. Digite qualquer código para prosseguir.'
-            ]);
+                'success' => false,
+                'message' => 'Somente o elaborador da demanda pode assinar nesta etapa.'
+            ], 403);
+        }
+
+        if ($procurementRequest->status === ProcurementRequest::STATUS_ASSINADO && !$user->isSecretario()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Somente o Secretário requisitante pode assinar nesta etapa.'
+            ], 403);
+        }
+
+        if ($procurementRequest->status === ProcurementRequest::STATUS_EM_ANALISE && !$user->isGabinete()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Somente um membro do Gabinete pode autorizar e assinar nesta etapa.'
+            ], 403);
         }
 
         try {
-            $user = auth()->user();
+            // 2. Resolve PDF content (First stage generates fresh PDF, later stages load previous PDF)
+            if ($procurementRequest->status === ProcurementRequest::STATUS_RASCUNHO) {
+                $pdfContent = $this->generatePdfContent($procurementRequest);
+                $stageName = 'elaborador';
+            } else {
+                // Load previously signed PDF to accumulate signatures
+                if ($procurementRequest->signed_file_path && Storage::disk('public')->exists($procurementRequest->signed_file_path)) {
+                    $pdfContent = Storage::disk('public')->get($procurementRequest->signed_file_path);
+                } else {
+                    $pdfContent = $this->generatePdfContent($procurementRequest);
+                }
+                $stageName = $procurementRequest->status === ProcurementRequest::STATUS_ASSINADO ? 'secretario' : 'gabinete';
+            }
+
+            $filename = "{$procurementRequest->reference_code}_assinatura_{$stageName}.pdf";
+
+            // 3. Request signature on Nextcloud LibreSign
+            // Pass the user's LibreSign account if configured, otherwise falls back to default service credentials
+            $signerAccount = $user->libresign_signer_account ?? $user->email;
             
-            // 1. Gera o conteúdo do PDF para obter o Hash (Integridade)
-            $pdfContent = $this->generatePdfContent($procurementRequest);
-            $docHash = hash('sha256', $pdfContent);
-            $docUuid = (string) $procurementRequest->id;
+            $result = $this->libresign->requestSignature($filename, $pdfContent, $signerAccount);
 
-            // 2. Solicita Token JWT ao Gov.Assaí (Passo 1 do Guia)
-            // Aqui enviamos os dados do signatário e o hash do documento
-            $jwt = $this->assinador->getGovSigningToken([
-                'cpf' => preg_replace('/\D/', '', $procurementRequest->requester_cpf),
-                'name' => $procurementRequest->requester_name ?? $user->name,
-                'email' => $user->email,
-                'doc_uuid' => $docUuid,
-                'doc_hash' => $docHash,
-            ]);
+            // 4. If bypass is enabled, customize the sign URL to point to our callback
+            $signUrl = $result['sign_url'];
+            if (config('services.libresign.bypass', true)) {
+                $signUrl = route('planning.signature.callback', [
+                    'procurementRequest' => $procurementRequest,
+                    'uuid' => $result['uuid']
+                ]);
+            }
 
-            // 3. Inicia o desafio MFA no Assinador (Passo 2 do Guia)
-            $challenge = $this->assinador->requestMfa($jwt, $docUuid, $docHash, 'whatsapp');
-
-            // Armazena o JWT e o Hash na sessão para o próximo passo (segurança)
-            session([
-                "signature_jwt_{$docUuid}" => $jwt,
-                "signature_hash_{$docUuid}" => $docHash
+            // 5. Update local tracking fields
+            $procurementRequest->update([
+                'libresign_uuid' => $result['uuid'],
+                'libresign_sign_request_uuid' => $result['sign_request_uuid'],
+                'assinatura_status' => 'pendente',
+                'pdf_assinado_url' => $signUrl,
             ]);
 
             return response()->json([
                 'success' => true,
-                'challenge_id' => $challenge['id'] ?? $challenge['challenge_id'],
-                'message' => 'Código enviado via WhatsApp.'
+                'message' => 'Solicitação de assinatura iniciada com sucesso.',
+                'sign_url' => $signUrl
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Erro ao solicitar MFA: ' . $e->getMessage());
+            Log::error('Erro ao inicializar assinatura LibreSign: ' . $e->getMessage(), [
+                'request_id' => $procurementRequest->id,
+                'trace' => $e->getTraceAsString()
+            ]);
             return response()->json([
                 'success' => false,
-                'message' => 'Erro ao iniciar fluxo de assinatura: ' . $e->getMessage()
+                'message' => 'Falha ao integrar com o Assinador: ' . $e->getMessage()
             ], 500);
         }
     }
 
     /**
-     * Passo 3 e 4: Verifica código MFA e realiza a assinatura definitiva.
+     * Simulation / Callback landing page when returning from signing.
      */
-    public function sign(Request $request, ProcurementRequest $procurementRequest)
+    public function signatureCallback(Request $request, ProcurementRequest $procurementRequest)
     {
-        // BYPASS para desenvolvimento
-        if (config('assinador.bypass') && app()->environment('local')) {
-            $pdfContent = $this->generatePdfContent($procurementRequest);
-            $path = 'signatures/' . $procurementRequest->reference_code . '_mocked.pdf';
-            Storage::put('public/' . $path, $pdfContent);
+        $uuid = $request->query('uuid');
 
-            $procurementRequest->update([
-                'status' => ProcurementRequest::STATUS_EM_ANALISE,
-                'signed_at' => now(),
-                'signature_hash' => 'MOCKED_SIGNATURE_' . uniqid(),
-                'signed_file_path' => $path,
-            ]);
+        // Check if bypass mode is on, if not, we handle the callback normally
+        $isBypass = (bool) config('services.libresign.bypass', true);
 
-            return response()->json([
-                'success' => true,
-                'message' => '[MOCK] Documento autorizado com sucesso (Sem Assinatura Digital)!',
-                'redirect' => route('planning.module-one.show', $procurementRequest)
-            ]);
-        }
-
-        $request->validate([
-            'mfa_code' => 'required|string|size:6',
+        return view('planning.module-one.signature_callback', [
+            'procurementRequest' => $procurementRequest,
+            'uuid' => $uuid,
+            'isBypass' => $isBypass
         ]);
+    }
 
-        $docUuid = (string) $procurementRequest->id;
-        $jwt = session("signature_jwt_{$docUuid}");
-        $challengeId = $request->challenge_id; // Frontend deve passar isso
+    /**
+     * Checks and finalized signature status verification.
+     */
+    public function verifySignature(ProcurementRequest $procurementRequest)
+    {
+        $uuid = $procurementRequest->libresign_uuid;
 
-        if (!$jwt) {
+        if (!$uuid || $procurementRequest->assinatura_status !== 'pendente') {
             return response()->json([
                 'success' => false,
-                'message' => 'Sessão de assinatura expirada. Inicie o processo novamente.'
-            ], 403);
+                'message' => 'Nenhuma assinatura pendente de verificação para este documento.'
+            ]);
         }
 
         try {
-            // 1. Verifica Código e obtém Autorização de Assinatura (Passo 3 do Guia)
-            $signingToken = $this->assinador->verifyMfa($jwt, $challengeId, $request->mfa_code);
+            // Query LibreSign for the status
+            $check = $this->libresign->checkSignatureStatus($uuid);
 
-            // 2. Gera o PDF novamente para garantir que nada mudou
-            $pdfContent = $this->generatePdfContent($procurementRequest);
+            // Status 3 = Concluído (Signed)
+            if ($check['status'] === 3) {
+                // Determine new status and target path
+                $stagePath = '';
+                $nextStatus = '';
+                
+                if ($procurementRequest->status === ProcurementRequest::STATUS_RASCUNHO) {
+                    $stagePath = "signatures/{$procurementRequest->reference_code}_elaborador.pdf";
+                    $nextStatus = ProcurementRequest::STATUS_ASSINADO; // Aguardando Secretário
+                } elseif ($procurementRequest->status === ProcurementRequest::STATUS_ASSINADO) {
+                    $stagePath = "signatures/{$procurementRequest->reference_code}_secretario.pdf";
+                    $nextStatus = ProcurementRequest::STATUS_EM_ANALISE; // Aguardando Gabinete
+                } elseif ($procurementRequest->status === ProcurementRequest::STATUS_EM_ANALISE) {
+                    $stagePath = "signatures/{$procurementRequest->reference_code}_gabinete.pdf";
+                    $nextStatus = ProcurementRequest::STATUS_APROVADO_COMPRAS; // Compras
+                }
 
-            // 3. Realiza a assinatura avançada (Passo 4 do Guia)
-            $result = $this->assinador->signAdvanced($signingToken, $pdfContent, $docUuid);
+                // Download the signed PDF
+                if (config('services.libresign.bypass', true)) {
+                    if ($procurementRequest->signed_file_path && Storage::disk('public')->exists($procurementRequest->signed_file_path)) {
+                        $pdfContent = Storage::disk('public')->get($procurementRequest->signed_file_path);
+                    } else {
+                        $pdfContent = $this->generatePdfContent($procurementRequest);
+                    }
+                } else {
+                    $pdfContent = $this->libresign->downloadSignedPdf($uuid);
+                }
 
-            // 4. Salva o PDF assinado
-            $path = 'signatures/' . $procurementRequest->reference_code . '_signed.pdf';
-            Storage::put('public/' . $path, $result['pdf_content']);
+                // Save signed PDF to public storage
+                Storage::disk('public')->put($stagePath, $pdfContent);
 
-            // 5. Atualiza o banco de dados - Já envia para o Gabinete
-            $procurementRequest->update([
-                'status' => ProcurementRequest::STATUS_EM_ANALISE,
-                'signed_at' => now(),
-                'signature_hash' => $result['hash'],
-                'signed_file_path' => $path,
-            ]);
+                // Update database
+                $procurementRequest->update([
+                    'status' => $nextStatus,
+                    'signed_at' => now(),
+                    'signature_hash' => hash('sha256', $pdfContent),
+                    'signed_file_path' => $stagePath,
+                    'assinatura_status' => 'assinado',
+                ]);
 
-            // Limpa a sessão
-            session()->forget(["signature_jwt_{$docUuid}", "signature_hash_{$docUuid}"]);
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Assinatura digital autenticada e registrada com sucesso!',
+                    'redirect' => route('planning.module-one.show', $procurementRequest)
+                ]);
+            }
 
             return response()->json([
-                'success' => true,
-                'message' => 'Documento assinado com sucesso!',
-                'redirect' => route('planning.module-one.show', $procurementRequest)
+                'success' => false,
+                'status' => $check['status'],
+                'message' => 'O documento ainda está pendente de assinatura no Nextcloud LibreSign.'
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Erro na assinatura: ' . $e->getMessage());
+            Log::error('Erro ao verificar status da assinatura: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Erro ao assinar: ' . $e->getMessage()
+                'message' => 'Falha ao verificar status: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -166,8 +213,12 @@ class SignatureController extends Controller
             'items' => $procurementRequest->items,
             'study' => $procurementRequest->studies->first(),
             'totalEstimated' => $procurementRequest->items->sum('total_value'),
-            'prioridades' => config('compras.prioridades'),
-            'secretarias' => config('compras.secretarias'),
+            'prioridades' => config('compras.prioridades', [
+                'low' => 'Baixa',
+                'medium' => 'Média',
+                'high' => 'Alta',
+            ]),
+            'secretarias' => config('compras.secretarias', []),
             'legalFraming' => $this->calculateLegalFraming($procurementRequest)
         ])->render();
 
@@ -177,7 +228,10 @@ class SignatureController extends Controller
     protected function calculateLegalFraming($request)
     {
         $total = $request->items->sum('total_value');
-        $thresholds = config('compras.lei_14133.dispensa.art75');
+        $thresholds = config('compras.lei_14133.dispensa.art75', [
+            'inciso_i' => 119812.01,
+            'inciso_ii' => 59906.01,
+        ]);
         
         $hasServices = $request->items->where('item_type', 'service')->count() > 0;
         

@@ -35,6 +35,9 @@ class AdminController extends Controller
             'role' => 'required|in:admin,elaborador,secretario,gabinete,compras',
             'secretaria_id' => 'nullable|exists:secretarias,id',
             'cpf' => 'nullable|string|max:14',
+            'libresign_username' => 'nullable|string|max:255',
+            'libresign_signer_account' => 'nullable|string|email|max:255',
+            'libresign_password' => 'nullable|string',
         ]);
 
         // Enforce: one secretary per secretariat
@@ -54,6 +57,9 @@ class AdminController extends Controller
             'role' => $data['role'],
             'secretaria_id' => $data['secretaria_id'] ?? null,
             'cpf' => $data['cpf'] ?? null,
+            'libresign_username' => $data['libresign_username'] ?? null,
+            'libresign_signer_account' => $data['libresign_signer_account'] ?? null,
+            'libresign_password' => !empty($data['libresign_password']) ? \Illuminate\Support\Facades\Crypt::encryptString($data['libresign_password']) : null,
         ]);
 
         return redirect()->back()->with('success', 'Usuário criado com sucesso!');
@@ -74,6 +80,9 @@ class AdminController extends Controller
             'role' => 'required|in:admin,elaborador,secretario,gabinete,compras',
             'secretaria_id' => 'nullable|exists:secretarias,id',
             'cpf' => 'nullable|string|max:14',
+            'libresign_username' => 'nullable|string|max:255',
+            'libresign_signer_account' => 'nullable|string|email|max:255',
+            'libresign_password' => 'nullable|string',
         ]);
 
         // Enforce: one secretary per secretariat
@@ -93,10 +102,16 @@ class AdminController extends Controller
             'role' => $data['role'],
             'secretaria_id' => $data['secretaria_id'] ?? null,
             'cpf' => $data['cpf'] ?? null,
+            'libresign_username' => $data['libresign_username'] ?? null,
+            'libresign_signer_account' => $data['libresign_signer_account'] ?? null,
         ];
 
         if (!empty($data['password'])) {
             $updateData['password'] = Hash::make($data['password']);
+        }
+
+        if ($request->filled('libresign_password')) {
+            $updateData['libresign_password'] = \Illuminate\Support\Facades\Crypt::encryptString($data['libresign_password']);
         }
 
         $user->update($updateData);

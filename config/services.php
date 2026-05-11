@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    'libresign' => [
+        'base_url' => env('LIBRESIGN_BASE_URL', 'https://assinador.assai.pr.gov.br/ocs/v2.php/apps/libresign/api/v1'),
+        'username' => env('LIBRESIGN_USERNAME'),
+        'password' => env('LIBRESIGN_PASSWORD'),
+        'signer' => env('LIBRESIGN_SIGNER'),
+        'bypass' => env('ASSINADOR_BYPASS', true),
+    ],
+
 ];

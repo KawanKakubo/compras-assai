@@ -18,9 +18,37 @@ class ProcurementRequest extends Model
     public const STATUS_DEVOLVIDO = 'devolvido';
     public const STATUS_FINALIZADO = 'finalizado';
 
-    public function canBeSigned(): bool
+    public function canElaboradorSign(): bool
     {
         return $this->status === self::STATUS_RASCUNHO;
+    }
+
+    public function canSecretarioSign(): bool
+    {
+        return $this->status === self::STATUS_ASSINADO;
+    }
+
+    public function canGabineteSign(): bool
+    {
+        return $this->status === self::STATUS_EM_ANALISE;
+    }
+
+    public function canBeSigned(): bool
+    {
+        $user = auth()->user();
+        if (!$user) {
+            return false;
+        }
+        if ($user->isElaborador() && $this->canElaboradorSign()) {
+            return true;
+        }
+        if ($user->isSecretario() && $this->canSecretarioSign()) {
+            return true;
+        }
+        if ($user->isGabinete() && $this->canGabineteSign()) {
+            return true;
+        }
+        return false;
     }
 
     public function canBeSubmitted(): bool
@@ -74,6 +102,10 @@ class ProcurementRequest extends Model
         'signed_at',
         'signature_hash',
         'signed_file_path',
+        'libresign_uuid',
+        'libresign_sign_request_uuid',
+        'assinatura_status',
+        'pdf_assinado_url',
     ];
 
     protected function casts(): array

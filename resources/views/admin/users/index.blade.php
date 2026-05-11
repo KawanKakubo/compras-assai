@@ -98,6 +98,24 @@
                 <input type="text" name="cpf" class="mask-cpf" placeholder="000.000.000-00" style="width:100%; background:var(--dark-bg); border:1px solid var(--border); padding:0.8rem; border-radius:10px; color:var(--text-main);">
             </div>
 
+            <div style="border-top: 1px solid var(--border); margin: 1.5rem 0; padding-top: 1rem;">
+                <h4 style="margin-bottom: 1rem; color: #2563eb; display: flex; align-items: center; gap: 0.5rem; font-size: 0.95rem;">
+                    <i class="ph ph-signature"></i> Credenciais LibreSign (Opcional)
+                </h4>
+                <div style="margin-bottom: 1.2rem;">
+                    <label style="display:block; margin-bottom:0.5rem; font-size:0.9rem; color:var(--text-muted);">Usuário Nextcloud</label>
+                    <input type="text" name="libresign_username" placeholder="ex: kawan.kakubo" style="width:100%; background:var(--dark-bg); border:1px solid var(--border); padding:0.8rem; border-radius:10px; color:var(--text-main);">
+                </div>
+                <div style="margin-bottom: 1.2rem;">
+                    <label style="display:block; margin-bottom:0.5rem; font-size:0.9rem; color:var(--text-muted);">E-mail Assinante LibreSign</label>
+                    <input type="email" name="libresign_signer_account" placeholder="ex: kawan@assai.pr.gov.br" style="width:100%; background:var(--dark-bg); border:1px solid var(--border); padding:0.8rem; border-radius:10px; color:var(--text-main);">
+                </div>
+                <div style="margin-bottom: 1.2rem;">
+                    <label style="display:block; margin-bottom:0.5rem; font-size:0.9rem; color:var(--text-muted);">Senha de Aplicativo (Nextcloud)</label>
+                    <input type="password" name="libresign_password" placeholder="••••••••••••••••" style="width:100%; background:var(--dark-bg); border:1px solid var(--border); padding:0.8rem; border-radius:10px; color:var(--text-main);">
+                </div>
+            </div>
+
             <div style="margin-bottom: 1.2rem;">
                 <label style="display:block; margin-bottom:0.5rem; font-size:0.9rem; color:var(--text-muted);">Senha Temporária</label>
                 <input type="password" name="password" required style="width:100%; background:var(--dark-bg); border:1px solid var(--border); padding:0.8rem; border-radius:10px; color:var(--text-main);">

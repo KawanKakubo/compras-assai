@@ -73,9 +73,10 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/planejamento/modulo-1/{procurementRequest}/etp', [ModuleOneController::class, 'downloadEtp'])->name('planning.module-one.download-etp');
     Route::post('/planejamento/modulo-1/{procurementRequest}/submit', [ModuleOneController::class, 'submitToGabinete'])->name('planning.module-one.submit');
 
-    // Digital Signature
-    Route::post('/planejamento/modulo-1/{procurementRequest}/signature/request-mfa', [\App\Http\Controllers\Planning\SignatureController::class, 'requestMfa'])->name('planning.signature.request-mfa');
-    Route::post('/planejamento/modulo-1/{procurementRequest}/signature/sign', [\App\Http\Controllers\Planning\SignatureController::class, 'sign'])->name('planning.signature.sign');
+    // Digital Signature (LibreSign)
+    Route::post('/planejamento/modulo-1/{procurementRequest}/signature/initialize', [\App\Http\Controllers\Planning\SignatureController::class, 'initializeSignature'])->name('planning.signature.initialize');
+    Route::get('/planejamento/modulo-1/{procurementRequest}/signature/callback', [\App\Http\Controllers\Planning\SignatureController::class, 'signatureCallback'])->name('planning.signature.callback');
+    Route::post('/planejamento/modulo-1/{procurementRequest}/signature/verify', [\App\Http\Controllers\Planning\SignatureController::class, 'verifySignature'])->name('planning.signature.verify');
 });
 
 Route::prefix('api/compras-gov')->controller(ComprasGovLookupController::class)->group(function (): void {

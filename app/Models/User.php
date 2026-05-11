@@ -10,10 +10,22 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-    #[Fillable(['name', 'email', 'password', 'role', 'secretaria_name', 'secretaria_acronym', 'secretaria_id', 'cpf'])]
-    #[Hidden(['password', 'remember_token'])]
+    #[Fillable(['name', 'email', 'password', 'role', 'secretaria_name', 'secretaria_acronym', 'secretaria_id', 'cpf', 'libresign_username', 'libresign_signer_account', 'libresign_password'])]
+    #[Hidden(['password', 'remember_token', 'libresign_password'])]
     class User extends Authenticatable
     {
+        public function getDecryptedLibresignPasswordAttribute(): ?string
+        {
+            if (empty($this->libresign_password)) {
+                return null;
+            }
+            try {
+                return \Illuminate\Support\Facades\Crypt::decryptString($this->libresign_password);
+            } catch (\Exception $e) {
+                return $this->libresign_password;
+            }
+        }
+
         public const ROLE_ADMIN = 'admin';
         public const ROLE_ELABORADOR = 'elaborador';
         public const ROLE_SECRETARIO = 'secretario';

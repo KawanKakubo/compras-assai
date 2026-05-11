@@ -165,6 +165,59 @@ class ModuleOneController extends Controller
 
     public function show(ProcurementRequest $procurementRequest): View
     {
+        // Silent LibreSign verification check on page load
+        if ($procurementRequest->assinatura_status === 'pendente' && $procurementRequest->libresign_uuid) {
+            try {
+                $libresign = app(\App\Services\LibreSignService::class);
+                $check = $libresign->checkSignatureStatus($procurementRequest->libresign_uuid);
+                
+                if ($check['status'] === 3) {
+                    $stagePath = '';
+                    $nextStatus = '';
+                    
+                    if ($procurementRequest->status === ProcurementRequest::STATUS_RASCUNHO) {
+                        $stagePath = "signatures/{$procurementRequest->reference_code}_elaborador.pdf";
+                        $nextStatus = ProcurementRequest::STATUS_ASSINADO;
+                    } elseif ($procurementRequest->status === ProcurementRequest::STATUS_ASSINADO) {
+                        $stagePath = "signatures/{$procurementRequest->reference_code}_secretario.pdf";
+                        $nextStatus = ProcurementRequest::STATUS_EM_ANALISE;
+                    } elseif ($procurementRequest->status === ProcurementRequest::STATUS_EM_ANALISE) {
+                        $stagePath = "signatures/{$procurementRequest->reference_code}_gabinete.pdf";
+                        $nextStatus = ProcurementRequest::STATUS_APROVADO_COMPRAS;
+                    }
+
+                    if ($stagePath && $nextStatus) {
+                        if (config('services.libresign.bypass', true)) {
+                            if ($procurementRequest->signed_file_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($procurementRequest->signed_file_path)) {
+                                $pdfContent = \Illuminate\Support\Facades\Storage::disk('public')->get($procurementRequest->signed_file_path);
+                            } else {
+                                $signatureController = app(\App\Http\Controllers\Planning\SignatureController::class);
+                                $reflector = new \ReflectionClass(\App\Http\Controllers\Planning\SignatureController::class);
+                                $method = $reflector->getMethod('generatePdfContent');
+                                $pdfContent = $method->invoke($signatureController, $procurementRequest);
+                            }
+                        } else {
+                            $pdfContent = $libresign->downloadSignedPdf($procurementRequest->libresign_uuid);
+                        }
+
+                        \Illuminate\Support\Facades\Storage::disk('public')->put($stagePath, $pdfContent);
+
+                        $procurementRequest->update([
+                            'status' => $nextStatus,
+                            'signed_at' => now(),
+                            'signature_hash' => hash('sha256', $pdfContent),
+                            'signed_file_path' => $stagePath,
+                            'assinatura_status' => 'assinado',
+                        ]);
+
+                        session()->flash('success', 'Assinatura digital reconhecida e homologada com sucesso!');
+                    }
+                }
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::error('Erro na verificação silenciosa LibreSign: ' . $e->getMessage());
+            }
+        }
+
         $procurementRequest->load(['items', 'studies.items']);
 
         $study = $procurementRequest->studies->first();
