@@ -26,33 +26,19 @@ class SignatureController extends Controller
     {
         $user = auth()->user();
 
-        // 1. Authorization checks based on status and user role
-        if ($procurementRequest->status === ProcurementRequest::STATUS_RASCUNHO && !$user->isElaborador()) {
+        // 1. Authorization checks based on current workflow step
+        if (!$procurementRequest->canBeApprovedBy($user)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Somente o elaborador da demanda pode assinar nesta etapa.'
-            ], 403);
-        }
-
-        if ($procurementRequest->status === ProcurementRequest::STATUS_ASSINADO && !$user->isSecretario()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Somente o Secretário requisitante pode assinar nesta etapa.'
-            ], 403);
-        }
-
-        if ($procurementRequest->status === ProcurementRequest::STATUS_EM_ANALISE && !$user->isGabinete()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Somente um membro do Gabinete pode autorizar e assinar nesta etapa.'
+                'message' => 'Você não tem permissão para assinar ou aprovar este documento nesta etapa.'
             ], 403);
         }
 
         try {
-            // 2. Resolve PDF content (First stage generates fresh PDF, later stages load previous PDF)
-            if ($procurementRequest->status === ProcurementRequest::STATUS_RASCUNHO) {
+            // 2. Resolve PDF content
+            // If it was rejected, we might need to regenerate it if the elaborator made changes
+            if ($procurementRequest->current_step === ProcurementRequest::STEP_ELABORADOR) {
                 $pdfContent = $this->generatePdfContent($procurementRequest);
-                $stageName = 'elaborador';
             } else {
                 // Load previously signed PDF to accumulate signatures
                 if ($procurementRequest->signed_file_path && Storage::disk('public')->exists($procurementRequest->signed_file_path)) {
@@ -60,18 +46,26 @@ class SignatureController extends Controller
                 } else {
                     $pdfContent = $this->generatePdfContent($procurementRequest);
                 }
-                $stageName = $procurementRequest->status === ProcurementRequest::STATUS_ASSINADO ? 'secretario' : 'gabinete';
             }
 
+            $stageName = $procurementRequest->current_step;
             $filename = "{$procurementRequest->reference_code}_assinatura_{$stageName}.pdf";
 
-            // 3. Request signature on Nextcloud LibreSign
-            // Pass the user's LibreSign account if configured, otherwise falls back to default service credentials
-            $signerAccount = $user->libresign_signer_account ?? $user->email;
-            
-            $result = $this->libresign->requestSignature($filename, $pdfContent, $signerAccount);
+            // 3. Define Visual Position based on Step
+            $visualPosition = match ($stageName) {
+                ProcurementRequest::STEP_ELABORADOR => ['page' => 1, 'x' => 50, 'y' => 750, 'width' => 180, 'height' => 60],
+                ProcurementRequest::STEP_SECRETARIO => ['page' => 1, 'x' => 350, 'y' => 750, 'width' => 180, 'height' => 60],
+                ProcurementRequest::STEP_GABINETE   => ['page' => 1, 'x' => 50, 'y' => 680, 'width' => 180, 'height' => 60],
+                ProcurementRequest::STEP_COMPRAS    => ['page' => 1, 'x' => 350, 'y' => 680, 'width' => 180, 'height' => 60],
+                default => ['page' => 1, 'x' => 50, 'y' => 50, 'width' => 150, 'height' => 50],
+            };
 
-            // 4. If bypass is enabled, customize the sign URL to point to our callback
+            // 4. Request signature on Nextcloud LibreSign
+            $signerAccount = $user->libresign_username ?? $user->email;
+            
+            $result = $this->libresign->requestSignature($filename, $pdfContent, $signerAccount, $visualPosition);
+
+            // 5. If bypass is enabled, customize the sign URL to point to our callback
             $signUrl = $result['sign_url'];
             if (config('services.libresign.bypass', true)) {
                 $signUrl = route('planning.signature.callback', [
@@ -80,12 +74,13 @@ class SignatureController extends Controller
                 ]);
             }
 
-            // 5. Update local tracking fields
+            // 6. Update local tracking fields
             $procurementRequest->update([
                 'libresign_uuid' => $result['uuid'],
                 'libresign_sign_request_uuid' => $result['sign_request_uuid'],
                 'assinatura_status' => 'pendente',
                 'pdf_assinado_url' => $signUrl,
+                'rejection_reason' => null, // Clear reason when restarting
             ]);
 
             return response()->json([
@@ -104,6 +99,39 @@ class SignatureController extends Controller
                 'message' => 'Falha ao integrar com o Assinador: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Rejects the request and returns it to the previous step (elaborador).
+     */
+    public function rejectRequest(Request $request, ProcurementRequest $procurementRequest)
+    {
+        $user = auth()->user();
+        
+        // Only Secretary or Gabinete can reject
+        if (!$user->isSecretario() && !$user->isGabinete()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Você não tem permissão para rejeitar este documento.'
+            ], 403);
+        }
+
+        $request->validate([
+            'reason' => 'required|string|min:5'
+        ]);
+
+        $procurementRequest->update([
+            'status' => ProcurementRequest::STATUS_REJEITADO,
+            'current_step' => ProcurementRequest::STEP_ELABORADOR,
+            'rejection_reason' => $request->reason,
+            'assinatura_status' => null,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Demanda devolvida para o elaborador com sucesso.',
+            'redirect' => route('planning.module-one.show', $procurementRequest)
+        ]);
     }
 
     /**
@@ -143,19 +171,23 @@ class SignatureController extends Controller
 
             // Status 3 = Concluído (Signed)
             if ($check['status'] === 3) {
+
                 // Determine new status and target path
                 $stagePath = '';
                 $nextStatus = '';
                 
-                if ($procurementRequest->status === ProcurementRequest::STATUS_RASCUNHO) {
+                if ($procurementRequest->current_step === ProcurementRequest::STEP_ELABORADOR) {
                     $stagePath = "signatures/{$procurementRequest->reference_code}_elaborador.pdf";
                     $nextStatus = ProcurementRequest::STATUS_ASSINADO; // Aguardando Secretário
-                } elseif ($procurementRequest->status === ProcurementRequest::STATUS_ASSINADO) {
+                    $nextStep = ProcurementRequest::STEP_SECRETARIO;
+                } elseif ($procurementRequest->current_step === ProcurementRequest::STEP_SECRETARIO) {
                     $stagePath = "signatures/{$procurementRequest->reference_code}_secretario.pdf";
                     $nextStatus = ProcurementRequest::STATUS_EM_ANALISE; // Aguardando Gabinete
-                } elseif ($procurementRequest->status === ProcurementRequest::STATUS_EM_ANALISE) {
+                    $nextStep = ProcurementRequest::STEP_GABINETE;
+                } elseif ($procurementRequest->current_step === ProcurementRequest::STEP_GABINETE) {
                     $stagePath = "signatures/{$procurementRequest->reference_code}_gabinete.pdf";
                     $nextStatus = ProcurementRequest::STATUS_APROVADO_COMPRAS; // Compras
+                    $nextStep = ProcurementRequest::STEP_COMPRAS;
                 }
 
                 // Download the signed PDF
@@ -175,6 +207,7 @@ class SignatureController extends Controller
                 // Update database
                 $procurementRequest->update([
                     'status' => $nextStatus,
+                    'current_step' => $nextStep,
                     'signed_at' => now(),
                     'signature_hash' => hash('sha256', $pdfContent),
                     'signed_file_path' => $stagePath,

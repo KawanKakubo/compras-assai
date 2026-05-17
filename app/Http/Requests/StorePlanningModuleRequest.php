@@ -20,13 +20,23 @@ class StorePlanningModuleRequest extends FormRequest
             'study.municipal_policy_applies' => $this->boolean('study.municipal_policy_applies'),
             'study.is_in_pca' => $this->boolean('study.is_in_pca'),
         ]);
+
+        if ($this->has('items')) {
+            $items = $this->input('items');
+            foreach ($items as $key => $item) {
+                if (isset($item['is_sustainable'])) {
+                    $items[$key]['is_sustainable'] = filter_var($item['is_sustainable'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+                }
+            }
+            $this->merge(['items' => $items]);
+        }
     }
 
     public function rules(): array
     {
         return [
             // ── Step 1: Identification ──────────────────────────
-            'reference_code' => ['nullable', 'string', 'max:50', 'unique:procurement_requests,reference_code'],
+            'reference_code' => ['nullable', 'string', 'max:50', 'unique:procurement_requests,reference_code,' . $this->procurement_request_id],
             'secretaria' => ['required', 'string', 'max:255'],
             'title' => ['required', 'string', 'max:255'],
             'object_summary' => ['required', 'string', 'max:200'],

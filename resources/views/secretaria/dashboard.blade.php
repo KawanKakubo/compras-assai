@@ -73,9 +73,21 @@
                         </span>
                     </td>
                     <td>
-                        <a href="{{ route('planning.module-one.show', $req->id) }}" class="nav-link" style="padding: 0.5rem; display: inline-flex;">
+                        <a href="{{ route('planning.module-one.show', $req->id) }}" class="nav-link" style="padding: 0.5rem; display: inline-flex;" title="Visualizar">
                             <i class="fa-solid fa-eye"></i>
                         </a>
+                        @if($req->canBeEditedBy(auth()->user()))
+                        <a href="{{ route('planning.module-one.create', ['edit' => $req->id]) }}" class="nav-link" style="padding: 0.5rem; display: inline-flex; color: var(--warning);" title="Editar">
+                            <i class="fa-solid fa-pencil"></i>
+                        </a>
+                        <form action="{{ route('planning.module-one.destroy', $req->id) }}" method="POST" style="display: inline-flex;" onsubmit="return confirm('Tem certeza que deseja inativar esta demanda?')">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" class="nav-link" style="padding: 0.5rem; border: none; background: none; color: var(--danger); cursor: pointer;" title="Inativar">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </form>
+                        @endif
                     </td>
                 </tr>
                 @empty

@@ -14,7 +14,7 @@ class DashboardController extends Controller
         $user = Auth::user();
         
         // Se for um usuário de secretaria, ele vê todas as solicitações daquela secretaria
-        $query = ProcurementRequest::query();
+        $query = ProcurementRequest::where('status', '!=', ProcurementRequest::STATUS_INATIVO);
         
         if ($user->secretaria_id) {
             $query->whereHas('user', function($q) use ($user) {

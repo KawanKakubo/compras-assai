@@ -51,6 +51,7 @@ Route::middleware(['auth'])->group(function () {
         // Intelligent Form (Module 1)
         Route::get('/planejamento/modulo-1', [ModuleOneController::class, 'create'])->name('planning.module-one.create');
         Route::post('/planejamento/modulo-1', [ModuleOneController::class, 'store'])->name('planning.module-one.store');
+        Route::delete('/planejamento/modulo-1/{procurementRequest}', [ModuleOneController::class, 'destroy'])->name('planning.module-one.destroy');
     });
 
     // Gabinete
@@ -75,6 +76,7 @@ Route::middleware(['auth'])->group(function () {
 
     // Digital Signature (LibreSign)
     Route::post('/planejamento/modulo-1/{procurementRequest}/signature/initialize', [\App\Http\Controllers\Planning\SignatureController::class, 'initializeSignature'])->name('planning.signature.initialize');
+    Route::post('/planejamento/modulo-1/{procurementRequest}/signature/reject', [\App\Http\Controllers\Planning\SignatureController::class, 'rejectRequest'])->name('planning.signature.reject');
     Route::get('/planejamento/modulo-1/{procurementRequest}/signature/callback', [\App\Http\Controllers\Planning\SignatureController::class, 'signatureCallback'])->name('planning.signature.callback');
     Route::post('/planejamento/modulo-1/{procurementRequest}/signature/verify', [\App\Http\Controllers\Planning\SignatureController::class, 'verifySignature'])->name('planning.signature.verify');
 });

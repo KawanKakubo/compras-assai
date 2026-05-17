@@ -11,8 +11,18 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Data placeholders
     const thresholds = window.WIZARD_DATA?.thresholds || { inciso_i: 130984.20, inciso_ii: 65492.11 };
+    const existingItems = window.WIZARD_DATA?.existingItems || [];
+    const existingTeam = window.WIZARD_DATA?.existingTeam || [];
     
     let currentStep = 0;
+
+    // Load existing items if any
+    if (existingItems.length > 0) {
+        existingItems.forEach(item => {
+            createItemCard(item.item_type, item);
+        });
+        calculateTotalsAndFraming();
+    }
     
     // ── Navigation ──────────────────────────────────────────────────────────
     function updateWizard() {
@@ -177,7 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ── Items Logic (Dynamic Addition & Deletion) ───────────────────────────
-    function createItemCard(type = 'material') {
+    function createItemCard(type = 'material', existingData = null) {
         const index = itemsContainer.querySelectorAll('.item-card').length;
         const isMaterial = type === 'material';
         
@@ -186,6 +196,17 @@ document.addEventListener('DOMContentLoaded', () => {
         card.dataset.index = index;
         card.dataset.type = type;
         
+        // Use existing data or defaults
+        const catalogCode = existingData ? existingData.catalog_code : '';
+        const description = existingData ? existingData.description : '';
+        const catmatDesc = existingData ? existingData.catmat_description : '';
+        const detailedDesc = existingData ? (existingData.detailed_description || '') : '';
+        const specificationJustification = existingData ? (existingData.specification_justification || '') : '';
+        const unit = existingData ? existingData.unit : '';
+        const quantity = existingData ? existingData.quantity : '';
+        const unitValue = existingData ? (existingData.unit_value || '') : '';
+        const memoryCalculation = existingData ? (existingData.memory_calculation || '') : '';
+        
         card.innerHTML = `
             <div class="item-header">
                 <span class="item-number">Item #${index + 1} (${isMaterial ? 'Material' : 'Serviço'})</span>
@@ -193,17 +214,17 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             
             <input type="hidden" name="items[${index}][item_type]" value="${type}">
-            <input type="hidden" name="items[${index}][source_system]" value="compras_gov">
-            <input type="hidden" name="items[${index}][catmat_group]" class="item-catmat-group">
-            <input type="hidden" name="items[${index}][catmat_class]" class="item-catmat-class">
-            <input type="hidden" name="items[${index}][catmat_pdm]" class="item-catmat-pdm">
-            <input type="hidden" name="items[${index}][is_sustainable]" class="item-sustainable">
-            <input type="hidden" name="items[${index}][price_median]" class="item-price-median">
-            <input type="hidden" name="items[${index}][price_min]" class="item-price-min">
-            <input type="hidden" name="items[${index}][price_max]" class="item-price-max">
-            <input type="hidden" name="items[${index}][price_sample_count]" class="item-price-sample">
+            <input type="hidden" name="items[${index}][source_system]" value="${existingData ? existingData.source_system : 'compras_gov'}">
+            <input type="hidden" name="items[${index}][catmat_group]" class="item-catmat-group" value="${existingData ? existingData.catmat_group : ''}">
+            <input type="hidden" name="items[${index}][catmat_class]" class="item-catmat-class" value="${existingData ? existingData.catmat_class : ''}">
+            <input type="hidden" name="items[${index}][catmat_pdm]" class="item-catmat-pdm" value="${existingData ? existingData.catmat_pdm : ''}">
+            <input type="hidden" name="items[${index}][is_sustainable]" class="item-sustainable" value="${existingData ? existingData.is_sustainable : 0}">
+            <input type="hidden" name="items[${index}][price_median]" class="item-price-median" value="${existingData ? (existingData.price_median || '') : ''}">
+            <input type="hidden" name="items[${index}][price_min]" class="item-price-min" value="${existingData ? (existingData.price_min || '') : ''}">
+            <input type="hidden" name="items[${index}][price_max]" class="item-price-max" value="${existingData ? (existingData.price_max || '') : ''}">
+            <input type="hidden" name="items[${index}][price_sample_count]" class="item-price-sample" value="${existingData ? (existingData.price_sample_count || '') : ''}">
 
-            <div class="hierarchy-navigation">
+            <div class="hierarchy-navigation" ${existingData ? 'style="display:none"' : ''}>
                 <div class="hierarchy-step" data-level="0">
                     <label><i class="ph ph-list-numbers"></i> Selecione o ${isMaterial ? 'Grupo' : 'Seção'}</label>
                     <select class="hierarchy-select" data-level="0">
@@ -221,48 +242,50 @@ document.addEventListener('DOMContentLoaded', () => {
                     </a>
                 </div>
             </div>
+            
+            ${existingData ? `<div style="margin-bottom: 15px;"><button type="button" class="btn btn-sm btn-secondary" onclick="this.parentElement.nextElementSibling.style.display='block'; this.parentElement.remove()"><i class="ph ph-magnifying-glass"></i> Alterar no Catálogo</button></div>` : ''}
 
             <div class="form-row" style="grid-template-columns: 1fr;">
                 <div class="form-group">
                     <label>Código do Catálogo</label>
-                    <input type="text" name="items[${index}][catalog_code]" class="item-catalog-code" readonly placeholder="Selecionado via catálogo">
+                    <input type="text" name="items[${index}][catalog_code]" class="item-catalog-code" readonly placeholder="Selecionado via catálogo" value="${catalogCode}">
                 </div>
             </div>
 
-            <input type="hidden" name="items[${index}][description]" class="item-description">
+            <input type="hidden" name="items[${index}][description]" class="item-description" value="${description}">
 
             <div class="form-row-3" style="row-gap: 15px;">
                 <div class="form-group" style="grid-column: span 3;">
                     <label style="color: var(--success);"><i class="ph ph-shield-check"></i> Descrição CATMAT/CATSER (Imutável)</label>
-                    <textarea name="items[${index}][catmat_description]" class="item-catmat-description" readonly style="background: var(--bg-primary, #f8fafc); opacity: 0.85; font-style: italic;" rows="2" placeholder="A descrição será preenchida automaticamente ao selecionar o item..."></textarea>
+                    <textarea name="items[${index}][catmat_description]" class="item-catmat-description" readonly style="background: var(--bg-primary, #f8fafc); opacity: 0.85; font-style: italic;" rows="2" placeholder="A descrição será preenchida automaticamente ao selecionar o item...">${catmatDesc}</textarea>
                 </div>
                 <div class="form-group" style="grid-column: span 3;">
                     <label><i class="ph ph-pencil-simple-line"></i> Especificações Detalhadas (Opcional)</label>
                     <div class="hint">Adicione especificidades locais (Ex: cor, marca recomendada, requisitos adicionais).</div>
-                    <textarea name="items[${index}][detailed_description]" class="item-detailed-description" rows="2" placeholder="Ex: Placa de vídeo dedicada 8GB VRAM, processador i7..."></textarea>
+                    <textarea name="items[${index}][detailed_description]" class="item-detailed-description" rows="2" placeholder="Ex: Placa de vídeo dedicada 8GB VRAM, processador i7...">${detailedDesc}</textarea>
                 </div>
-                <div class="form-group item-justification-container" style="grid-column: span 3; display: none;">
+                <div class="form-group item-justification-container" style="grid-column: span 3; ${specificationJustification ? 'display: block' : 'display: none'}">
                     <label style="color: var(--warning);"><i class="ph ph-warning-circle"></i> Justificativa Técnica para Requisitos Adicionais (Obrigatória)</label>
                     <div class="hint" style="color: var(--text-muted);">A lei proíbe o direcionamento de marca. Justifique por que estas especificações adicionais são de interesse público.</div>
-                    <textarea name="items[${index}][specification_justification]" class="item-specification-justification" rows="2" placeholder="Justifique tecnicamente a necessidade dessas especificações para o interesse público..."></textarea>
+                    <textarea name="items[${index}][specification_justification]" class="item-specification-justification" rows="2" placeholder="Justifique tecnicamente a necessidade dessas especificações para o interesse público...">${specificationJustification}</textarea>
                 </div>
                 <div class="form-group">
                     <label>Unidade *</label>
-                    <input type="text" name="items[${index}][unit]" class="item-unit" required placeholder="Ex: CX">
+                    <input type="text" name="items[${index}][unit]" class="item-unit" required placeholder="Ex: CX" value="${unit}">
                 </div>
                 <div class="form-group">
                     <label>Quantidade *</label>
-                    <input type="number" name="items[${index}][quantity]" class="item-quantity" required step="0.0001" min="0.0001">
+                    <input type="number" name="items[${index}][quantity]" class="item-quantity" required step="0.0001" min="0.0001" value="${quantity}">
                 </div>
                 <div class="form-group">
                     <label>Valor Unitário Estimado (R$)</label>
-                    <input type="number" name="items[${index}][unit_value]" class="item-unit-value" step="0.01" min="0" placeholder="Busca automática...">
+                    <input type="number" name="items[${index}][unit_value]" class="item-unit-value" step="0.01" min="0" placeholder="Busca automática..." value="${unitValue}">
                 </div>
             </div>
             
             <div class="form-group">
                 <label>Memória de Cálculo da Quantidade</label>
-                <input type="text" name="items[${index}][memory_calculation]" placeholder="Ex: 5 caixas por escola x 10 escolas = 50">
+                <input type="text" name="items[${index}][memory_calculation]" placeholder="Ex: 5 caixas por escola x 10 escolas = 50" value="${memoryCalculation}">
             </div>
 
             <div class="item-totals">
@@ -273,7 +296,22 @@ document.addEventListener('DOMContentLoaded', () => {
         
         itemsContainer.appendChild(card);
         setupItemCardListeners(card, index, type);
-        setupHierarchyNavigation(card, type);
+        if (!existingData) {
+            setupHierarchyNavigation(card, type);
+        } else {
+            // If existing, we might want to manually trigger total calculation
+            const totalDisplay = card.querySelector('.item-total-display');
+            const total = (parseFloat(quantity) || 0) * (parseFloat(unitValue) || 0);
+            totalDisplay.textContent = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total);
+            
+            // Re-setup hierarchy navigation if they click to change
+            const btnChange = card.querySelector('button[onclick*="Alterar no Catálogo"]');
+            if (btnChange) {
+                // The hierarchy navigation will be initialized when the container is shown
+                // But for simplicity, let's just initialize it now but hidden
+                setupHierarchyNavigation(card, type);
+            }
+        }
     }
     
     function reorderItemCards() {
@@ -829,22 +867,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const teamMembersContainer = document.getElementById('team-members-container');
     let teamCounter = 0;
 
-    btnAddTeamMember.addEventListener('click', () => {
+    function addTeamMemberRow(existingData = null) {
         const index = teamCounter++;
         const row = document.createElement('div');
         row.className = 'form-row-3';
         row.style.marginBottom = '12px';
         row.innerHTML = `
             <div class="form-group" style="margin-bottom: 0;">
-                <input type="text" name="study[team_signatures][${index}][name]" placeholder="Nome do membro" required>
+                <input type="text" name="study[team_signatures][${index}][name]" placeholder="Nome do membro" required value="${existingData ? existingData.name : ''}">
             </div>
             <div class="form-group" style="margin-bottom: 0;">
-                <input type="text" name="study[team_signatures][${index}][role]" placeholder="Cargo/Função">
+                <input type="text" name="study[team_signatures][${index}][role]" placeholder="Cargo/Função" value="${existingData ? existingData.role : ''}">
             </div>
             <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()" style="align-self: flex-start; height: 42px;">Remover</button>
         `;
         teamMembersContainer.appendChild(row);
-    });
+    }
+
+    btnAddTeamMember.addEventListener('click', () => addTeamMemberRow());
+
+    // Load existing team members if any
+    if (existingTeam.length > 0) {
+        existingTeam.forEach(member => addTeamMemberRow(member));
+    }
 
     // ── Masks ──────────────────────────────────────────────────────────────
     function applyCpfMask(e) {

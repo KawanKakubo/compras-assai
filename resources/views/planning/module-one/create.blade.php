@@ -54,6 +54,9 @@
 
     <form id="wizard-form" action="{{ route('planning.module-one.store') }}" method="POST">
         @csrf
+        @if($procurementRequest)
+            <input type="hidden" name="procurement_request_id" value="{{ $procurementRequest->id }}">
+        @endif
 
         <!-- =========================================================
              STEP 1: IDENTIFICAÇÃO
@@ -68,14 +71,22 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label>Secretaria Requisitante *</label>
+                        @php
+                            $savedSecretaria = $procurementRequest ? $procurementRequest->secretaria : null;
+                            $userSecretaria = auth()->user()->secretaria_name;
+                            $finalSecretariaValue = $savedSecretaria ?: $userSecretaria;
+                            
+                            $secretarias = config('compras.secretarias');
+                            $finalSecretariaName = $secretarias[$finalSecretariaValue] ?? $finalSecretariaValue;
+                        @endphp
                         @if(auth()->check() && auth()->user()->isSecretaria() && auth()->user()->secretaria_name)
-                            <input type="text" value="{{ auth()->user()->secretaria_name }}" readonly style="background: rgba(255,255,255,0.05); color: var(--text-muted); cursor: not-allowed; border-color: transparent;">
-                            <input type="hidden" name="secretaria" value="{{ auth()->user()->secretaria_name }}" data-name="{{ auth()->user()->secretaria_name }}">
+                            <input type="text" value="{{ $finalSecretariaName }}" readonly style="background: rgba(255,255,255,0.05); color: var(--text-muted); cursor: not-allowed; border-color: transparent;">
+                            <input type="hidden" name="secretaria" value="{{ $finalSecretariaValue }}">
                         @else
                             <select name="secretaria" required>
                                 <option value="">Selecione a secretaria...</option>
                                 @foreach($secretarias as $key => $name)
-                                    <option value="{{ $key }}">{{ $name }}</option>
+                                    <option value="{{ $key }}" {{ ($finalSecretariaValue == $key || $finalSecretariaValue == $name) ? 'selected' : '' }}>{{ $name }}</option>
                                 @endforeach
                             </select>
                         @endif
@@ -83,22 +94,22 @@
                     <div class="form-group">
                         <label>Grau de Prioridade *</label>
                         <select name="priority_level" id="priority_level" required>
-                            <option value="low">Baixa (Rotina)</option>
-                            <option value="medium" selected>Média (Planejada)</option>
-                            <option value="high">Alta (Urgência)</option>
+                            <option value="low" {{ ($procurementRequest?->priority_level == 'low') ? 'selected' : '' }}>Baixa (Rotina)</option>
+                            <option value="medium" {{ ($procurementRequest?->priority_level == 'medium' || !$procurementRequest) ? 'selected' : '' }}>Média (Planejada)</option>
+                            <option value="high" {{ ($procurementRequest?->priority_level == 'high') ? 'selected' : '' }}>Alta (Urgência)</option>
                         </select>
                     </div>
                 </div>
 
-                <div class="form-group conditional" id="conditional-priority">
+                <div class="form-group conditional {{ $procurementRequest?->priority_level == 'high' ? 'show' : '' }}" id="conditional-priority">
                     <label>Justificativa para Prioridade Alta *</label>
-                    <textarea name="priority_justification" placeholder="Por que essa demanda é urgente? Quais os riscos se não for atendida agora?"></textarea>
+                    <textarea name="priority_justification" placeholder="Por que essa demanda é urgente? Quais os riscos se não for atendida agora?">{{ $procurementRequest?->priority_justification }}</textarea>
                 </div>
 
                 <div class="form-row">
                     <div class="form-group">
                         <label>Previsão Desejada para Conclusão</label>
-                        <input type="date" name="planned_conclusion_at">
+                        <input type="date" name="planned_conclusion_at" value="{{ $procurementRequest?->planned_conclusion_at ? $procurementRequest->planned_conclusion_at->format('Y-m-d') : '' }}">
                     </div>
                     <div class="form-group">
                         <label>Código de Referência Gerado</label>
@@ -115,15 +126,15 @@
                     <div class="form-row-3">
                         <div class="form-group">
                             <label>Nome do Requisitante *</label>
-                            <input type="text" name="requester_name" value="{{ auth()->user()->name ?? '' }}" required placeholder="Nome completo">
+                            <input type="text" name="requester_name" value="{{ $procurementRequest?->requester_name ?? (auth()->user()->name ?? '') }}" required placeholder="Nome completo">
                         </div>
                         <div class="form-group">
                             <label>Cargo/Função *</label>
-                            <input type="text" name="requester_role" required placeholder="Ex: Diretor de Saúde">
+                            <input type="text" name="requester_role" value="{{ $procurementRequest?->requester_role }}" required placeholder="Ex: Diretor de Saúde">
                         </div>
                         <div class="form-group">
                             <label>CPF *</label>
-                            <input type="text" name="requester_cpf" class="mask-cpf" required placeholder="000.000.000-00">
+                            <input type="text" name="requester_cpf" value="{{ $procurementRequest?->requester_cpf }}" class="mask-cpf" required placeholder="000.000.000-00">
                         </div>
                     </div>
                 </div>
@@ -136,15 +147,15 @@
                     <div class="form-row-3">
                         <div class="form-group">
                             <label>Nome da Autoridade *</label>
-                            <input type="text" name="responsible_name" value="{{ $secretary?->name ?? '' }}" required placeholder="Nome completo">
+                            <input type="text" name="responsible_name" value="{{ $procurementRequest?->responsible_name ?? ($secretary?->name ?? '') }}" required placeholder="Nome completo">
                         </div>
                         <div class="form-group">
                             <label>Cargo/Função *</label>
-                            <input type="text" name="responsible_role" value="{{ $secretary ? 'Secretário Municipal' : '' }}" required placeholder="Ex: Secretário Municipal">
+                            <input type="text" name="responsible_role" value="{{ $procurementRequest?->responsible_role ?? ($secretary ? 'Secretário Municipal' : '') }}" required placeholder="Ex: Secretário Municipal">
                         </div>
                         <div class="form-group">
                             <label>CPF *</label>
-                            <input type="text" name="responsible_cpf" value="{{ $secretary?->cpf ?? '' }}" class="mask-cpf" required placeholder="000.000.000-00">
+                            <input type="text" name="responsible_cpf" value="{{ $procurementRequest?->responsible_cpf ?? ($secretary?->cpf ?? '') }}" class="mask-cpf" required placeholder="000.000.000-00">
                         </div>
                     </div>
                 </div>
@@ -163,12 +174,12 @@
                 <div class="form-group">
                     <label>Título da Demanda *</label>
                     <div class="hint">Ex: Aquisição de material de expediente para as escolas municipais.</div>
-                    <input type="text" name="title" id="title" required placeholder="O que você está comprando?">
+                    <input type="text" name="title" id="title" value="{{ $procurementRequest?->title }}" required placeholder="O que você está comprando?">
                 </div>
 
                 <div class="form-group">
                     <label>Resumo do Objeto (Máx 200 caracteres) * <span class="legal-ref">DFD Art. 8º, II</span></label>
-                    <textarea name="object_summary" maxlength="200" required rows="2" placeholder="Resumo curto para publicação..."></textarea>
+                    <textarea name="object_summary" maxlength="200" required rows="2" placeholder="Resumo curto para publicação...">{{ $procurementRequest?->object_summary }}</textarea>
                 </div>
             </div>
 
@@ -177,12 +188,12 @@
                 <div class="form-group">
                     <label>Por que você precisa disso? * <span class="legal-ref">DFD Art. 8º, I</span></label>
                     <div class="hint">Explique o problema que esta contratação vai resolver para o município.</div>
-                    <textarea name="need_justification" required rows="4" placeholder="Descreva o contexto, o problema e a solução..."></textarea>
+                    <textarea name="need_justification" required rows="4" placeholder="Descreva o contexto, o problema e a solução...">{{ $procurementRequest?->need_justification }}</textarea>
                 </div>
                 <div class="form-group">
                     <label>Vínculo com outra contratação? <span class="legal-ref">DFD Art. 8º, VII</span></label>
                     <div class="hint">Se esta demanda depende de outra para funcionar, informe aqui.</div>
-                    <input type="text" name="linked_request" placeholder="Ex: SD-2026-001 ou 'Não se aplica'">
+                    <input type="text" name="linked_request" value="{{ $procurementRequest?->linked_request }}" placeholder="Ex: SD-2026-001 ou 'Não se aplica'">
                 </div>
             </div>
 
@@ -192,25 +203,25 @@
                 <div class="form-group">
                     <label style="display:inline-block; margin-right: 16px;">Gera Impacto Ambiental?</label>
                     <div class="toggle-group" style="display:inline-flex;">
-                        <label><input type="radio" name="has_environmental_impact" value="1"> Sim</label>
-                        <label style="margin-left: 10px;"><input type="radio" name="has_environmental_impact" value="0" checked> Não</label>
+                        <label><input type="radio" name="has_environmental_impact" value="1" {{ $procurementRequest?->has_environmental_impact ? 'checked' : '' }}> Sim</label>
+                        <label style="margin-left: 10px;"><input type="radio" name="has_environmental_impact" value="0" {{ !$procurementRequest?->has_environmental_impact ? 'checked' : '' }}> Não</label>
                     </div>
                 </div>
                 
-                <div class="form-group conditional" id="conditional-environmental">
-                    <textarea name="environmental_impacts" placeholder="Descreva os impactos e as medidas de mitigação exigidas no TR..."></textarea>
+                <div class="form-group conditional {{ $procurementRequest?->has_environmental_impact ? 'show' : '' }}" id="conditional-environmental">
+                    <textarea name="environmental_impacts" placeholder="Descreva os impactos e as medidas de mitigação exigidas no TR...">{{ $procurementRequest?->environmental_impacts }}</textarea>
                 </div>
 
                 <div class="form-group">
                     <label style="display:inline-block; margin-right: 16px;">Exige Logística Reversa?</label>
                     <div class="toggle-group" style="display:inline-flex;">
-                        <label><input type="radio" name="has_reverse_logistics" value="1"> Sim</label>
-                        <label style="margin-left: 10px;"><input type="radio" name="has_reverse_logistics" value="0" checked> Não</label>
+                        <label><input type="radio" name="has_reverse_logistics" value="1" {{ $procurementRequest?->has_reverse_logistics ? 'checked' : '' }}> Sim</label>
+                        <label style="margin-left: 10px;"><input type="radio" name="has_reverse_logistics" value="0" {{ !$procurementRequest?->has_reverse_logistics ? 'checked' : '' }}> Não</label>
                     </div>
                 </div>
                 
-                <div class="form-group conditional" id="conditional-logistics">
-                    <textarea name="reverse_logistics" placeholder="Descreva como o fornecedor deverá recolher embalagens, baterias, etc..."></textarea>
+                <div class="form-group conditional {{ $procurementRequest?->has_reverse_logistics ? 'show' : '' }}" id="conditional-logistics">
+                    <textarea name="reverse_logistics" placeholder="Descreva como o fornecedor deverá recolher embalagens, baterias, etc...">{{ $procurementRequest?->reverse_logistics }}</textarea>
                 </div>
             </div>
         </div>
@@ -256,7 +267,7 @@
             <div class="card" style="text-align: center; padding: 40px 20px;">
                 <div style="font-size: 1rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.1em;">Valor Total Estimado</div>
                 <div id="display-total-geral" style="font-size: 3rem; font-weight: 800; color: var(--accent); margin: 8px 0 24px;">R$ 0,00</div>
-                <input type="hidden" name="study[estimated_total_cost]" id="hidden-total-estimated">
+                <input type="hidden" name="study[estimated_total_cost]" id="hidden-total-estimated" value="{{ $procurementRequest?->studies->first()?->estimated_total_cost }}">
                 
                 <div id="legal-framing-banner" class="legal-banner licitacao" style="text-align: left; max-width: 600px; margin: 0 auto;">
                     <i class="ph-fill ph-warning-circle icon"></i> 
@@ -278,6 +289,7 @@
         <!-- =========================================================
              STEP 5: ANÁLISES ETP
              ========================================================= -->
+        @php $study = $procurementRequest?->studies->first(); @endphp
         <div class="wizard-step" id="step-5">
             <h2 class="step-title">Estudo Técnico Preliminar (Parte 1)</h2>
             <p class="step-subtitle">As informações a seguir comporão as análises obrigatórias do ETP.</p>
@@ -287,19 +299,19 @@
                 <div class="form-group">
                     <label style="display:inline-block; margin-right: 16px;">Esta demanda consta no PCA vigente? *</label>
                     <div class="toggle-group" style="display:inline-flex;">
-                        <label><input type="radio" name="study[is_in_pca]" value="1"> Sim</label>
-                        <label style="margin-left: 10px;"><input type="radio" name="study[is_in_pca]" value="0" checked> Não</label>
+                        <label><input type="radio" name="study[is_in_pca]" value="1" {{ $study?->is_in_pca ? 'checked' : '' }}> Sim</label>
+                        <label style="margin-left: 10px;"><input type="radio" name="study[is_in_pca]" value="0" {{ !$study?->is_in_pca ? 'checked' : '' }}> Não</label>
                     </div>
                 </div>
                 
-                <div class="form-row conditional" id="conditional-pca">
+                <div class="form-row conditional {{ $study?->is_in_pca ? 'show' : '' }}" id="conditional-pca">
                     <div class="form-group">
                         <label>ID/Referência no PCA</label>
-                        <input type="text" name="study[pca_reference]">
+                        <input type="text" name="study[pca_reference]" value="{{ $study?->pca_reference }}">
                     </div>
                     <div class="form-group">
                         <label>Descrição do Item no PCA</label>
-                        <input type="text" name="study[pca_description]">
+                        <input type="text" name="study[pca_description]" value="{{ $study?->pca_description }}">
                     </div>
                 </div>
             </div>
@@ -309,17 +321,17 @@
                 <div class="form-group">
                     <label>Descrição da Necessidade <span class="hint">(ETP Seção 2.1)</span></label>
                     <div class="hint">Descreva o problema identificado e a demanda administrativa de forma clara.</div>
-                    <textarea name="study[need_description]" rows="3" placeholder="Se vazio, usará a justificativa geral..."></textarea>
+                    <textarea name="study[need_description]" rows="3" placeholder="Se vazio, usará a justificativa geral...">{{ $study?->need_description }}</textarea>
                 </div>
                 <div class="form-group">
                     <label>Motivação/Justificativa Detalhada <span class="hint">(ETP Seção 2.2)</span></label>
                     <div class="hint">Apresente os motivos que levaram a esta contratação e sua relação com as atividades do órgão.</div>
-                    <textarea name="study[motivation]" rows="3" placeholder="Se vazio, usará a justificativa geral..."></textarea>
+                    <textarea name="study[motivation]" rows="3" placeholder="Se vazio, usará a justificativa geral...">{{ $study?->motivation }}</textarea>
                 </div>
                 <div class="form-group">
                     <label>Estimativa da Demanda <span class="hint">(ETP Seção 2.3)</span></label>
                     <div class="hint">Descreva o cálculo ou a estimativa de consumo dos materiais ou contratação do serviço.</div>
-                    <textarea name="study[demand_estimate]" rows="3" placeholder="Abaixo segue a relação detalhada dos itens e quantidades estimadas, calculadas de acordo com as necessidades da pasta..."></textarea>
+                    <textarea name="study[demand_estimate]" rows="3" placeholder="Abaixo segue a relação detalhada dos itens e quantidades estimadas, calculadas de acordo com as necessidades da pasta...">{{ $study?->demand_estimate }}</textarea>
                 </div>
             </div>
 
@@ -328,29 +340,29 @@
                 <div class="form-group">
                     <label>Levantamento de Soluções Disponíveis <span class="legal-ref">Art. 18, § 1º, V</span></label>
                     <div class="hint">Descreva as soluções encontradas no mercado que atendem à necessidade.</div>
-                    <textarea name="study[solution_mapping]" rows="3">Apenas uma solução identificada no mercado capaz de atender aos requisitos estabelecidos de forma eficiente.</textarea>
+                    <textarea name="study[solution_mapping]" rows="3">{{ $study?->solution_mapping ?? 'Apenas uma solução identificada no mercado capaz de atender aos requisitos estabelecidos de forma eficiente.' }}</textarea>
                 </div>
                 
                 <div class="form-group">
                     <label>Por que esta solução foi a escolhida? E por que as outras foram descartadas?</label>
-                    <textarea name="study[discarded_solutions]" rows="2"></textarea>
+                    <textarea name="study[discarded_solutions]" rows="2">{{ $study?->discarded_solutions }}</textarea>
                 </div>
 
                 <div class="form-group">
                     <label>Justificativa para Parcelamento ou Não Parcelamento <span class="legal-ref">Art. 18, § 1º, VIII</span></label>
-                    <textarea name="study[parceling_justification]" rows="2">O objeto não será parcelado em lotes visando a economia de escala e a padronização do fornecimento, além de evitar a gestão de múltiplos contratos para o mesmo fim.</textarea>
+                    <textarea name="study[parceling_justification]" rows="2">{{ $study?->parceling_justification ?? 'O objeto não será parcelado em lotes visando a economia de escala e a padronização do fornecimento, além de evitar a gestão de múltiplos contratos para o mesmo fim.' }}</textarea>
                 </div>
 
                 <div class="form-group">
                     <label>Providências Prévias ao Contrato <span class="legal-ref">Art. 18, § 1º, XI</span></label>
                     <div class="hint">Descreva medidas necessárias antes de celebrar o contrato (ex: indicação de fiscal, adequação física).</div>
-                    <textarea name="study[prerequisites]" rows="3" placeholder="Indicar as providências prévias necessárias, ou deixe em branco para preenchimento padrão..."></textarea>
+                    <textarea name="study[prerequisites]" rows="3" placeholder="Indicar as providências prévias necessárias, ou deixe em branco para preenchimento padrão...">{{ $study?->prerequisites }}</textarea>
                 </div>
 
                 <div class="form-group">
                     <label>Contratações Correlatas e/ou Interdependentes <span class="legal-ref">Art. 18, § 1º, VI</span></label>
                     <div class="hint">Informe se há outras contratações vinculadas ou interdependentes a esta.</div>
-                    <textarea name="study[correlated_contracts]" rows="3" placeholder="Não foram identificadas contratações correlatas ou interdependentes necessárias..."></textarea>
+                    <textarea name="study[correlated_contracts]" rows="3" placeholder="Não foram identificadas contratações correlatas ou interdependentes necessárias...">{{ $study?->correlated_contracts }}</textarea>
                 </div>
             </div>
             
@@ -358,11 +370,11 @@
                 <div class="card-title"><i class="ph ph-list-checks"></i> Requisitos e Resultados</div>
                 <div class="form-group">
                     <label>Requisitos Técnicos da Solução <span class="legal-ref">Art. 18, § 1º, III</span></label>
-                    <textarea name="study[solution_requirements]" rows="3" placeholder="Garantia mínima? Certificação específica? Padrões técnicos?"></textarea>
+                    <textarea name="study[solution_requirements]" rows="3" placeholder="Garantia mínima? Certificação específica? Padrões técnicos?">{{ $study?->solution_requirements }}</textarea>
                 </div>
                 <div class="form-group">
                     <label>Resultados Pretendidos <span class="legal-ref">Art. 18, § 1º, IX</span></label>
-                    <textarea name="study[expected_results]" rows="2" placeholder="O que o órgão espera ganhar/melhorar com essa compra?"></textarea>
+                    <textarea name="study[expected_results]" rows="2" placeholder="O que o órgão espera ganhar/melhorar com essa compra?">{{ $study?->expected_results }}</textarea>
                 </div>
             </div>
         </div>
@@ -381,16 +393,16 @@
                     <div class="form-group">
                         <label>Viabilidade Técnica</label>
                         <select name="study[viability_technical]">
-                            <option value="Viável. O mercado possui soluções padrão.">Viável. Mercado possui soluções padrão.</option>
-                            <option value="Viável com restrições.">Viável com restrições técnicas.</option>
-                            <option value="Inviável.">Inviável.</option>
+                            <option value="Viável. O mercado possui soluções padrão." {{ $study?->viability_technical == 'Viável. O mercado possui soluções padrão.' ? 'selected' : '' }}>Viável. Mercado possui soluções padrão.</option>
+                            <option value="Viável com restrições." {{ $study?->viability_technical == 'Viável com restrições.' ? 'selected' : '' }}>Viável com restrições técnicas.</option>
+                            <option value="Inviável." {{ $study?->viability_technical == 'Inviável.' ? 'selected' : '' }}>Inviável.</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label>Viabilidade Econômica</label>
                         <select name="study[viability_economic]">
-                            <option value="Viável. Os preços praticados estão condizentes com o mercado público.">Viável. Preços condizentes com o mercado.</option>
-                            <option value="Inviável.">Inviável.</option>
+                            <option value="Viável. Os preços praticados estão condizentes com o mercado público." {{ $study?->viability_economic == 'Viável. Os preços praticados estão condizentes com o mercado público.' ? 'selected' : '' }}>Viável. Preços condizentes com o mercado.</option>
+                            <option value="Inviável." {{ $study?->viability_economic == 'Inviável.' ? 'selected' : '' }}>Inviável.</option>
                         </select>
                     </div>
                 </div>
@@ -398,16 +410,16 @@
                 <div class="form-group" style="margin-top: 16px;">
                     <label style="font-size: 1rem; color: var(--text-primary);">Decisão Final da Viabilidade *</label>
                     <div class="toggle-group" style="margin-top: 8px;">
-                        <label class="toggle-btn active" style="color:var(--success)"><input type="radio" name="study[viability_decision]" value="viable" checked> A Contratação é Viável</label>
-                        <label class="toggle-btn" style="color:var(--warning)"><input type="radio" name="study[viability_decision]" value="viable_with_restrictions"> Viável com Restrições</label>
-                        <label class="toggle-btn" style="color:var(--danger)"><input type="radio" name="study[viability_decision]" value="not_viable"> Inviável</label>
+                        <label class="toggle-btn {{ ($study?->viability_decision == 'viable' || !$study) ? 'active' : '' }}" style="color:var(--success)"><input type="radio" name="study[viability_decision]" value="viable" {{ ($study?->viability_decision == 'viable' || !$study) ? 'checked' : '' }}> A Contratação é Viável</label>
+                        <label class="toggle-btn {{ $study?->viability_decision == 'viable_with_restrictions' ? 'active' : '' }}" style="color:var(--warning)"><input type="radio" name="study[viability_decision]" value="viable_with_restrictions" {{ $study?->viability_decision == 'viable_with_restrictions' ? 'checked' : '' }}> Viável com Restrições</label>
+                        <label class="toggle-btn {{ $study?->viability_decision == 'not_viable' ? 'active' : '' }}" style="color:var(--danger)"><input type="radio" name="study[viability_decision]" value="not_viable" {{ $study?->viability_decision == 'not_viable' ? 'checked' : '' }}> Inviável</label>
                     </div>
                 </div>
 
                 <div class="form-group" style="margin-top: 16px;">
                     <label>Justificativa da Viabilidade *</label>
                     <div class="hint">Justifique os motivos técnicos, econômicos e operacionais que fundamentam a decisão de viabilidade da contratação.</div>
-                    <textarea name="study[viability_justification]" required rows="3" id="viability-justification-textarea" placeholder="A contratação se mostra viável sob os aspectos técnicos, econômicos e operacionais...">Com base nos estudos realizados, a contratação se mostra plenamente viável sob os aspectos técnicos, econômicos e operacionais, atendendo com eficiência ao interesse público e às necessidades da pasta.</textarea>
+                    <textarea name="study[viability_justification]" required rows="3" id="viability-justification-textarea" placeholder="A contratação se mostra viável sob os aspectos técnicos, econômicos e operacionais...">{{ $study?->viability_justification ?? 'Com base nos estudos realizados, a contratação se mostra plenamente viável sob os aspectos técnicos, econômicos e operacionais, atendendo com eficiência ao interesse público e às necessidades da pasta.' }}</textarea>
                 </div>
             </div>
 
@@ -417,29 +429,29 @@
                 <div class="form-group">
                     <label style="display:inline-block; margin-right: 16px;">O objeto enquadra-se no Programa Municipal de Compras? *</label>
                     <div class="toggle-group" style="display:inline-flex;">
-                        <label><input type="radio" name="study[municipal_program_eligible]" value="1"> Sim</label>
-                        <label style="margin-left: 10px;"><input type="radio" name="study[municipal_program_eligible]" value="0" checked> Não</label>
+                        <label><input type="radio" name="study[municipal_program_eligible]" value="1" {{ $study?->municipal_program_eligible ? 'checked' : '' }}> Sim</label>
+                        <label style="margin-left: 10px;"><input type="radio" name="study[municipal_program_eligible]" value="0" {{ !$study?->municipal_program_eligible ? 'checked' : '' }}> Não</label>
                     </div>
                 </div>
                 
-                <div class="conditional" id="conditional-municipal-program">
+                <div class="conditional {{ $study?->municipal_program_eligible ? 'show' : '' }}" id="conditional-municipal-program">
                     <div class="form-row">
                         <div class="form-group">
                             <label>Segmento Local</label>
-                            <input type="text" name="study[municipal_program_segment]" placeholder="Ex: Serviços Gráficos Locais">
+                            <input type="text" name="study[municipal_program_segment]" value="{{ $study?->municipal_program_segment }}" placeholder="Ex: Serviços Gráficos Locais">
                         </div>
                         <div class="form-group">
                             <label>Recomendação</label>
                             <select name="study[municipal_program_recommendation]">
-                                <option value="Lote Exclusivo ME/EPP Local">Lote Exclusivo ME/EPP Local (Até R$ {{ number_format($programaMunicipal['limite_exclusividade_me_epp'], 2, ',', '.') }})</option>
-                                <option value="Cota Reservada de {{ $programaMunicipal['percentual_cota_reservada'] }}%">Cota Reservada ({{ $programaMunicipal['percentual_cota_reservada'] }}%)</option>
-                                <option value="Margem de Preferência Normal">Margem de Preferência Normal</option>
+                                <option value="Lote Exclusivo ME/EPP Local" {{ $study?->municipal_program_recommendation == 'Lote Exclusivo ME/EPP Local' ? 'selected' : '' }}>Lote Exclusivo ME/EPP Local (Até R$ {{ number_format($programaMunicipal['limite_exclusividade_me_epp'], 2, ',', '.') }})</option>
+                                <option value="Cota Reservada de {{ $programaMunicipal['percentual_cota_reservada'] }}%" {{ str_contains($study?->municipal_program_recommendation ?? '', 'Cota Reservada') ? 'selected' : '' }}>Cota Reservada ({{ $programaMunicipal['percentual_cota_reservada'] }}%)</option>
+                                <option value="Margem de Preferência Normal" {{ $study?->municipal_program_recommendation == 'Margem de Preferência Normal' ? 'selected' : '' }}>Margem de Preferência Normal</option>
                             </select>
                         </div>
                     </div>
                     <div class="form-group">
                         <label>Justificativa do Enquadramento</label>
-                        <textarea name="study[municipal_program_justification]" rows="2">A contratação fomenta o comércio local e o desenvolvimento municipal, possuindo ao menos 3 fornecedores competitivos na região.</textarea>
+                        <textarea name="study[municipal_program_justification]" rows="2">{{ $study?->municipal_program_justification ?? 'A contratação fomenta o comércio local e o desenvolvimento municipal, possuindo ao menos 3 fornecedores competitivos na região.' }}</textarea>
                     </div>
                 </div>
             </div>
@@ -448,7 +460,7 @@
                 <div class="card-title"><i class="ph ph-users"></i> Equipe de Planejamento</div>
                 <div class="form-group">
                     <label>Portaria de Designação</label>
-                    <input type="text" name="study[planning_team_portaria]" placeholder="Ex: Portaria nº 123/2026">
+                    <input type="text" name="study[planning_team_portaria]" value="{{ $study?->planning_team_portaria }}" placeholder="Ex: Portaria nº 123/2026">
                 </div>
                 
                 <label>Membros da Equipe</label>
@@ -502,7 +514,9 @@
 <script>
     // Pass config data to Javascript safely
     window.WIZARD_DATA = {
-        thresholds: @json($thresholds)
+        thresholds: @json($thresholds),
+        existingItems: @json($procurementRequest ? $procurementRequest->items : []),
+        existingTeam: @json($study ? $study->team_signatures : [])
     };
 </script>
 <script src="{{ asset('js/wizard.js') }}"></script>

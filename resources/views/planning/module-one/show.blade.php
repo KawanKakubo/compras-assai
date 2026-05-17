@@ -141,6 +141,27 @@
         </div>
     @endif
 
+    <!-- Rejection Alert -->
+    @if($procurementRequest->status === 'rejeitado' && $procurementRequest->rejection_reason)
+        <div style="max-width: 1200px; margin: 1.5rem auto 0 auto; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color: #ef4444; padding: 1.5rem; border-radius: 12px; animation: fadeIn 0.4s ease-out; font-family: sans-serif;">
+            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; font-weight: bold;">
+                <i class="ph ph-warning-circle" style="font-size: 1.5rem;"></i>
+                Solicitação Devolvida para Correção
+            </div>
+            <div style="font-size: 0.95rem; line-height: 1.5; background: rgba(255, 255, 255, 0.05); padding: 1rem; border-radius: 8px; border-left: 4px solid #ef4444;">
+                <strong>Motivo da Devolução:</strong><br>
+                {{ $procurementRequest->rejection_reason }}
+            </div>
+            @if($user?->isElaborador())
+                <div style="margin-top: 1rem;">
+                    <a href="{{ route('planning.module-one.create', ['edit' => $procurementRequest->id]) }}" class="btn btn-primary" style="background: #ef4444; border-color: #ef4444;">
+                        <i class="ph ph-note-pencil"></i> Editar e Corrigir Agora
+                    </a>
+                </div>
+            @endif
+        </div>
+    @endif
+
     <div class="document-container">
         <!-- Status Card and Action Panel -->
         <div class="status-card status-{{ $procurementRequest->status }}">
@@ -154,7 +175,7 @@
                             'assinado' => 'Aguardando Co-assinatura (Secretário)',
                             'em_analise' => 'Aguardando Homologação (Gabinete)',
                             'aprovado_compras' => 'Aprovado p/ Compras (Finalizado)',
-                            'rejeitado' => 'Rejeitado pelo Gabinete',
+                            'rejeitado' => 'Devolvido p/ Correção',
                             'devolvido' => 'Devolvido p/ Complementação',
                         ];
                     @endphp
@@ -162,11 +183,23 @@
                 </div>
             </div>
             
-            <div class="final-actions" style="display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end;">
+            <div class="final-actions" style="display: flex; flex-direction: row; gap: 0.75rem; align-items: center;">
                 @if($canUserSignNow)
                     <button class="btn-gabinete btn-gabinete-purple" onclick="initializeLibreSign()" id="btn-signature-trigger">
                         <i class="{{ $buttonIcon }}"></i> {{ $buttonLabel }}
                     </button>
+                    
+                    @if($procurementRequest->current_step !== 'elaborador')
+                        <button class="btn-gabinete" onclick="openRejectModal()" style="background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2);">
+                            <i class="ph ph-x-circle"></i> Devolver p/ Correção
+                        </button>
+                    @endif
+                @elseif($procurementRequest->status === 'rascunho' || $procurementRequest->status === 'rejeitado')
+                    @if($user?->isElaborador())
+                        <a href="{{ route('planning.module-one.create', ['edit' => $procurementRequest->id]) }}" class="btn-gabinete" style="background: #2563eb; color: white;">
+                            <i class="ph ph-note-pencil"></i> Editar Demanda
+                        </a>
+                    @endif
                 @elseif($procurementRequest->assinatura_status === 'pendente')
                     <button class="btn-gabinete btn-gabinete-success" onclick="verifyActiveSignature()" id="btn-verify-trigger" style="animation: pulse 1.5s infinite;">
                         <i class="ph ph-arrows-counter-clockwise"></i> Verificar Assinatura Pendente
@@ -326,6 +359,13 @@
             const btn = document.getElementById('btn-signature-trigger');
             const redirectModal = document.getElementById('redirect-modal');
             
+            // To ensure popup blockers don't block the new tab, we MUST open it synchronously before the await
+            const newTab = window.open('about:blank', '_blank');
+            if (!newTab) {
+                alert('Por favor, permita pop-ups para este site para abrir o assinador em uma nova aba.');
+                return;
+            }
+
             btn.disabled = true;
             btn.innerHTML = '<i class="ph ph-circle-notch ph-spin"></i> Inicializando...';
             redirectModal.style.display = 'flex';
@@ -342,14 +382,21 @@
                 const data = await response.json();
 
                 if (data.success && data.sign_url) {
-                    window.location.href = data.sign_url;
+                    newTab.location.href = data.sign_url;
+                    
+                    btn.innerHTML = '<i class="ph ph-check-circle"></i> Assinatura Iniciada';
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
                 } else {
+                    newTab.close();
                     alert(data.message || 'Falha ao iniciar processo de assinatura.');
                     btn.disabled = false;
                     btn.innerHTML = '{{ $buttonLabel }}';
                     redirectModal.style.display = 'none';
                 }
             } catch (e) {
+                newTab.close();
                 console.error('Error starting signature:', e);
                 alert('Ocorreu um erro ao contatar o servidor de assinaturas.');
                 btn.disabled = false;
@@ -390,7 +437,74 @@
                 btn.innerHTML = '<i class="ph ph-arrows-counter-clockwise"></i> Verificar Assinatura Pendente';
             }
         }
+
+        // Rejection Logic
+        function openRejectModal() {
+            document.getElementById('reject-modal').style.display = 'flex';
+        }
+
+        function closeRejectModal() {
+            document.getElementById('reject-modal').style.display = 'none';
+        }
+
+        async function submitRejection() {
+            const reason = document.getElementById('rejection-reason-input').value;
+            const btn = document.getElementById('btn-submit-rejection');
+
+            if (!reason || reason.length < 5) {
+                alert('Por favor, informe um motivo válido (mínimo 5 caracteres).');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="ph ph-circle-notch ph-spin"></i> Processando...';
+
+            try {
+                const response = await fetch("{{ route('planning.signature.reject', $procurementRequest) }}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    },
+                    body: JSON.stringify({ reason: reason })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(data.message);
+                    window.location.href = data.redirect;
+                } else {
+                    alert(data.message || 'Falha ao processar devolução.');
+                    btn.disabled = false;
+                    btn.innerHTML = 'Confirmar Devolução';
+                }
+            } catch (e) {
+                console.error('Error rejecting:', e);
+                alert('Erro ao tentar processar a devolução.');
+                btn.disabled = false;
+                btn.innerHTML = 'Confirmar Devolução';
+            }
+        }
     </script>
+
+    <!-- Rejection Modal -->
+    <div id="reject-modal" class="modal-overlay" style="display: none; font-family: sans-serif;">
+        <div class="signature-modal-card" style="padding: 2rem; border-radius: 20px; width: 100%; max-width: 500px; text-align: left;">
+            <h3 style="color: var(--text-main); margin-bottom: 0.5rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
+                <i class="ph ph-warning-circle" style="color: #ef4444;"></i> Devolver para Correção
+            </h3>
+            <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem;">Explique o motivo da devolução. O elaborador receberá esta mensagem e poderá editar a demanda.</p>
+            
+            <textarea id="rejection-reason-input" placeholder="Ex: O valor total está incorreto, por favor revise os itens 2 e 3..." 
+                style="width: 100%; min-height: 120px; padding: 1rem; border-radius: 12px; border: 1px solid var(--border); background: var(--dark-bg); color: var(--text-main); font-family: inherit; margin-bottom: 1.5rem; resize: vertical; box-sizing: border-box;"></textarea>
+            
+            <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeRejectModal()" style="border: none; padding: 0.75rem 1.5rem;">Cancelar</button>
+                <button id="btn-submit-rejection" class="btn btn-primary" onclick="submitRejection()" style="background: #ef4444; border: none; padding: 0.75rem 1.5rem;">Confirmar Devolução</button>
+            </div>
+        </div>
+    </div>
 
     <style>
         @keyframes spin {

@@ -11,14 +11,24 @@ use App\Services\Planning\DocumentTemplateService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class ModuleOneController extends Controller
 {
-    public function create(): View
+    public function create(Request $request): View
     {
         $user = auth()->user();
         $acronym = $user?->secretaria_acronym;
+        
+        $procurementRequest = null;
+        if ($request->has('edit')) {
+            $procurementRequest = ProcurementRequest::with(['items', 'studies'])->findOrFail($request->edit);
+            
+            if (!$procurementRequest->canBeEditedBy($user)) {
+                abort(403, 'Você não tem permissão para editar esta demanda neste momento.');
+            }
+        }
 
         // Fetch the secretary for the logged-in user's secretariat
         $secretary = null;
@@ -43,9 +53,10 @@ class ModuleOneController extends Controller
             'prioridades' => config('compras.prioridades'),
             'unidadesComuns' => config('compras.unidades_comuns'),
             'programaMunicipal' => config('compras.programa_municipal'),
-            'nextReferenceCode' => ProcurementRequest::generateReferenceCode($acronym),
+            'nextReferenceCode' => $procurementRequest ? $procurementRequest->reference_code : ProcurementRequest::generateReferenceCode($acronym),
             'currentUser' => $user,
             'secretary' => $secretary,
+            'procurementRequest' => $procurementRequest,
         ]);
     }
 
@@ -53,7 +64,7 @@ class ModuleOneController extends Controller
     {
         $validated = $request->validated();
 
-        $procurementRequest = DB::transaction(function () use ($validated): ProcurementRequest {
+        $procurementRequest = DB::transaction(function () use ($validated, $request): ProcurementRequest {
             // ── SD (Solicitação de Demanda) ──────────────────────
             $requestData = Arr::only($validated, [
                 'reference_code',
@@ -82,15 +93,32 @@ class ModuleOneController extends Controller
                 'responsible_role',
             ]);
 
-            if (empty($requestData['reference_code'])) {
-                $requestData['reference_code'] = ProcurementRequest::generateReferenceCode();
+            $isUpdate = $request->has('procurement_request_id');
+            
+            if ($isUpdate) {
+                $procurementRequest = ProcurementRequest::findOrFail($request->procurement_request_id);
+                // Reset status to draft if it was rejected
+                if ($procurementRequest->status === ProcurementRequest::STATUS_REJEITADO) {
+                    $requestData['status'] = ProcurementRequest::STATUS_RASCUNHO;
+                    $requestData['rejection_reason'] = null;
+                }
+                $procurementRequest->update($requestData);
+                
+                // Clear old items and studies for fresh save (simplification)
+                $procurementRequest->items()->delete();
+                $procurementRequest->studies()->delete();
+            } else {
+                if (empty($requestData['reference_code'])) {
+                    $requestData['reference_code'] = ProcurementRequest::generateReferenceCode();
+                }
+
+                $requestData['user_id'] = auth()->id();
+                $requestData['status'] = ProcurementRequest::STATUS_RASCUNHO;
+                $requestData['current_step'] = ProcurementRequest::STEP_ELABORADOR;
+                $requestData['requisition_unit'] = $validated['secretaria'] ?? null;
+
+                $procurementRequest = ProcurementRequest::create($requestData);
             }
-
-            $requestData['user_id'] = auth()->id();
-            $requestData['status'] = ProcurementRequest::STATUS_RASCUNHO;
-            $requestData['requisition_unit'] = $validated['secretaria'] ?? null;
-
-            $procurementRequest = ProcurementRequest::create($requestData);
 
             // ── ETP (Estudo Técnico Preliminar) ─────────────────
             $studyData = $validated['study'];
@@ -160,7 +188,20 @@ class ModuleOneController extends Controller
 
         return redirect()
             ->route('planning.module-one.show', $procurementRequest)
-            ->with('status', 'Solicitação registrada com sucesso. Documentos prontos para download.');
+            ->with('status', 'Solicitação processada com sucesso.');
+    }
+
+    public function destroy(ProcurementRequest $procurementRequest): RedirectResponse
+    {
+        if (!$procurementRequest->canBeEditedBy(auth()->user())) {
+            abort(403, 'Você não tem permissão para inativar esta demanda.');
+        }
+
+        $procurementRequest->update(['status' => ProcurementRequest::STATUS_INATIVO]);
+
+        return redirect()
+            ->route('secretaria.dashboard')
+            ->with('status', 'Solicitação inativada com sucesso.');
     }
 
     public function show(ProcurementRequest $procurementRequest): View
@@ -174,16 +215,20 @@ class ModuleOneController extends Controller
                 if ($check['status'] === 3) {
                     $stagePath = '';
                     $nextStatus = '';
+                    $nextStep = '';
                     
-                    if ($procurementRequest->status === ProcurementRequest::STATUS_RASCUNHO) {
+                    if ($procurementRequest->current_step === ProcurementRequest::STEP_ELABORADOR) {
                         $stagePath = "signatures/{$procurementRequest->reference_code}_elaborador.pdf";
                         $nextStatus = ProcurementRequest::STATUS_ASSINADO;
-                    } elseif ($procurementRequest->status === ProcurementRequest::STATUS_ASSINADO) {
+                        $nextStep = ProcurementRequest::STEP_SECRETARIO;
+                    } elseif ($procurementRequest->current_step === ProcurementRequest::STEP_SECRETARIO) {
                         $stagePath = "signatures/{$procurementRequest->reference_code}_secretario.pdf";
                         $nextStatus = ProcurementRequest::STATUS_EM_ANALISE;
-                    } elseif ($procurementRequest->status === ProcurementRequest::STATUS_EM_ANALISE) {
+                        $nextStep = ProcurementRequest::STEP_GABINETE;
+                    } elseif ($procurementRequest->current_step === ProcurementRequest::STEP_GABINETE) {
                         $stagePath = "signatures/{$procurementRequest->reference_code}_gabinete.pdf";
                         $nextStatus = ProcurementRequest::STATUS_APROVADO_COMPRAS;
+                        $nextStep = ProcurementRequest::STEP_COMPRAS;
                     }
 
                     if ($stagePath && $nextStatus) {
@@ -204,6 +249,7 @@ class ModuleOneController extends Controller
 
                         $procurementRequest->update([
                             'status' => $nextStatus,
+                            'current_step' => $nextStep,
                             'signed_at' => now(),
                             'signature_hash' => hash('sha256', $pdfContent),
                             'signed_file_path' => $stagePath,

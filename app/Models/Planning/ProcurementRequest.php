@@ -17,53 +17,46 @@ class ProcurementRequest extends Model
     public const STATUS_REJEITADO = 'rejeitado';
     public const STATUS_DEVOLVIDO = 'devolvido';
     public const STATUS_FINALIZADO = 'finalizado';
+    public const STATUS_INATIVO = 'inativo';
 
-    public function canElaboradorSign(): bool
+    public const STEP_ELABORADOR = 'elaborador';
+    public const STEP_SECRETARIO = 'secretario';
+    public const STEP_GABINETE = 'gabinete';
+    public const STEP_COMPRAS = 'compras';
+
+    public function canBeEditedBy($user): bool
     {
-        return $this->status === self::STATUS_RASCUNHO;
+        if (!$user) return false;
+        
+        // Elaborador can edit if it's draft or rejected back to them
+        if ($user->isElaborador() && in_array($this->status, [self::STATUS_RASCUNHO, self::STATUS_REJEITADO, self::STATUS_DEVOLVIDO])) {
+            return true;
+        }
+
+        return false;
     }
 
-    public function canSecretarioSign(): bool
+    public function canBeApprovedBy($user): bool
     {
-        return $this->status === self::STATUS_ASSINADO;
-    }
+        if (!$user) return false;
 
-    public function canGabineteSign(): bool
-    {
-        return $this->status === self::STATUS_EM_ANALISE;
+        return match ($this->current_step) {
+            self::STEP_ELABORADOR => $user->isElaborador() && $this->status === self::STATUS_RASCUNHO,
+            self::STEP_SECRETARIO => $user->isSecretario() && $this->status === self::STATUS_ASSINADO,
+            self::STEP_GABINETE => $user->isGabinete() && $this->status === self::STATUS_EM_ANALISE,
+            default => false,
+        };
     }
 
     public function canBeSigned(): bool
     {
         $user = auth()->user();
-        if (!$user) {
-            return false;
-        }
-        if ($user->isElaborador() && $this->canElaboradorSign()) {
-            return true;
-        }
-        if ($user->isSecretario() && $this->canSecretarioSign()) {
-            return true;
-        }
-        if ($user->isGabinete() && $this->canGabineteSign()) {
-            return true;
-        }
-        return false;
+        return $this->canBeApprovedBy($user);
     }
 
     public function canBeSubmitted(): bool
     {
         return $this->status === self::STATUS_ASSINADO;
-    }
-
-    public function canBeEvaluatedByGabinete(): bool
-    {
-        return $this->status === self::STATUS_EM_ANALISE;
-    }
-
-    public function canBeProcessedByCompras(): bool
-    {
-        return $this->status === self::STATUS_APROVADO_COMPRAS;
     }
 
     public function user()
@@ -98,6 +91,8 @@ class ProcurementRequest extends Model
         'responsible_cpf',
         'responsible_role',
         'status',
+        'rejection_reason',
+        'current_step',
         'metadata',
         'signed_at',
         'signature_hash',

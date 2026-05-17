@@ -19,11 +19,11 @@ class LibreSignService
     {
         $this->baseUrl = config('services.libresign.base_url', 'https://assinador.assai.pr.gov.br/ocs/v2.php/apps/libresign/api/v1');
         $this->bypass = (bool) config('services.libresign.bypass', true);
-        $this->resolveCredentials();
     }
 
     /**
      * Resolves credentials based on authenticated user or fallback config.
+     * Must be called inside methods to ensure auth()->user() is available.
      */
     protected function resolveCredentials(): void
     {
@@ -58,24 +58,39 @@ class LibreSignService
     }
 
     /**
-     * Requests a signature for a PDF file.
-     * 
-     * @param string $filename Name of the file in LibreSign
-     * @param string $pdfContent Raw binary content of the PDF
-     * @param string|null $signerAccount Optional specific signer account
-     * @return array [uuid, sign_request_uuid, sign_url]
+     * Sends a document to LibreSign for digital signature.
+     * Supports multiple signers and visual placement.
      */
-    public function requestSignature(string $filename, string $pdfContent, ?string $signerAccount = null): array
+    public function requestSignature($filename, $pdfContent, $signers = [], $visualPosition = null)
     {
-        $targetSigner = $signerAccount ?? $this->signerAccount;
+        $this->resolveCredentials();
 
-        if ($this->bypass) {
-            Log::info('LibreSign Service: Requesting Signature (BYPASS MOCK)', [
-                'filename' => $filename,
-                'signer' => $targetSigner
-            ]);
+        // If $signers is a string (legacy support), convert to array
+        if (is_string($signers)) {
+            $signers = [
+                [
+                    'identifyMethods' => [
+                        [
+                            'method' => 'account',
+                            'value' => $signers,
+                            'mandatory' => 1
+                        ]
+                    ]
+                ]
+            ];
+        }
 
-            $mockUuid = 'mock-uuid-' . bin2hex(random_bytes(8));
+        // Default visual position if not provided
+        $visualPosition = $visualPosition ?? [
+            'page' => 1,
+            'x' => 350,
+            'y' => 700,
+            'width' => 200,
+            'height' => 100
+        ];
+
+        if (config('services.libresign.bypass', true)) {
+            $mockUuid = 'mock-doc-' . bin2hex(random_bytes(8));
             $mockSignRequestUuid = 'mock-sign-req-' . bin2hex(random_bytes(8));
             
             return [
@@ -86,29 +101,27 @@ class LibreSignService
         }
 
         try {
-            $base64Pdf = base64_encode($pdfContent);
             $payload = [
                 'name' => $filename,
                 'file' => [
-                    'url' => 'data:application/pdf;base64,' . $base64Pdf
+                    'base64' => base64_encode($pdfContent)
                 ],
-                'signers' => [
-                    [
-                        'identifyMethods' => [
-                            [
-                                'method' => 'account',
-                                'value' => $targetSigner,
-                                'mandatory' => 1
-                            ]
-                        ]
-                    ]
+                'signers' => $signers,
+                'visual_signature' => [
+                    'position' => [
+                        'page' => $visualPosition['page'] ?? 1,
+                        'x' => $visualPosition['x'] ?? 350,
+                        'y' => $visualPosition['y'] ?? 700
+                    ],
+                    'width' => $visualPosition['width'] ?? 200,
+                    'height' => $visualPosition['height'] ?? 100
                 ]
             ];
 
             Log::info('Sending request to LibreSign', [
                 'url' => $this->baseUrl . '/request-signature',
                 'username' => $this->username,
-                'signer' => $targetSigner
+                'signers_count' => count($signers)
             ]);
 
             $response = Http::withHeaders($this->getHeaders())
@@ -125,6 +138,8 @@ class LibreSignService
 
             $data = $response->json();
             
+            Log::info('LibreSign raw response (JSON): ' . json_encode($data));
+            
             // OCS API standard wraps responses in ocs -> data
             $ocsData = $data['ocs']['data'] ?? null;
             if (!$ocsData) {
@@ -132,28 +147,74 @@ class LibreSignService
                 throw new \RuntimeException('Estrutura de dados inválida retornada pelo LibreSign.');
             }
 
-            // OCS data can wrap properties differently sometimes depending on Nextcloud version
-            $uuid = $ocsData['uuid'] ?? $ocsData['data']['uuid'] ?? null;
-            $signRequestUuid = $ocsData['sign_request_uuid'] ?? $ocsData['data']['sign_request_uuid'] ?? null;
+            // Search deeply for UUIDs using a more robust helper
+            $uuid = $this->findKeyInArray($data, 'uuid');
+            $signRequestUuid = $this->findKeyInArray($data, 'sign_request_uuid') 
+                            ?? $this->findKeyInArray($data, 'signRequestUuid');
+            
+            // If still not found, check if there is a 'url' field that contains a UUID
+            $apiUrl = $this->findKeyInArray($data, 'url') ?? $this->findKeyInArray($data, 'file');
+            if (!$signRequestUuid && $apiUrl && is_string($apiUrl)) {
+                if (preg_match('/([a-f0-9-]{36})/', $apiUrl, $matches)) {
+                    $signRequestUuid = $matches[1];
+                    Log::info('Extracted signRequestUuid from URL string', ['uuid' => $signRequestUuid, 'url' => $apiUrl]);
+                }
+            }
 
             if (!$uuid) {
                 Log::error('UUID not found in LibreSign response', ['data' => $data]);
                 throw new \RuntimeException('Não foi possível recuperar o UUID do documento no LibreSign.');
             }
 
+            // Auto-healing: if sign_request_uuid is missing from creation, poll the status
+            if (!$signRequestUuid) {
+                Log::info('sign_request_uuid missing from initial response, attempting auto-healing...', ['uuid' => $uuid]);
+                $statusRes = $this->checkSignatureStatus($uuid);
+                if (isset($statusRes['raw_data'])) {
+                    $signRequestUuid = $this->findKeyInArray($statusRes['raw_data'], 'sign_request_uuid');
+                }
+            }
+
+            // Fallback: if we STILL don't have it, we use the uuid but log it
+            // Note: LibreSign f/sign/ usually REQUIRES sign_request_uuid
+            $sessionUuid = $signRequestUuid ?? $uuid;
+            
+            if (!$signRequestUuid) {
+                Log::warning('LibreSign: Using document uuid as session uuid fallback. Redirection might fail.', ['uuid' => $uuid]);
+            }
+
+            $parsedUrl = parse_url($this->baseUrl);
+            $hostUrl = ($parsedUrl['scheme'] ?? 'https') . '://' . ($parsedUrl['host'] ?? 'assinador.assai.pr.gov.br');
+
             return [
                 'uuid' => $uuid,
                 'sign_request_uuid' => $signRequestUuid,
-                'sign_url' => "https://assinador.assai.pr.gov.br/apps/libresign/f/sign/{$uuid}/pdf"
+                'sign_url' => "{$hostUrl}/apps/libresign/f/sign/{$sessionUuid}/pdf"
             ];
 
         } catch (\Exception $e) {
-            Log::error('Error calling LibreSign requestSignature', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
+            Log::error('LibreSign requestSignature exception: ' . $e->getMessage());
             throw $e;
         }
+    }
+
+    /**
+     * Recursively find a key in a nested array
+     */
+    private function findKeyInArray(array $array, string $key)
+    {
+        if (array_key_exists($key, $array)) {
+            return $array[$key];
+        }
+        foreach ($array as $item) {
+            if (is_array($item)) {
+                $result = $this->findKeyInArray($item, $key);
+                if ($result !== null) {
+                    return $result;
+                }
+            }
+        }
+        return null;
     }
 
     /**
@@ -164,6 +225,7 @@ class LibreSignService
      */
     public function checkSignatureStatus(string $uuid): array
     {
+        $this->resolveCredentials();
         if ($this->bypass) {
             Log::info('LibreSign Service: Check Signature Status (BYPASS MOCK)', ['uuid' => $uuid]);
             return [
@@ -246,6 +308,7 @@ class LibreSignService
      */
     public function downloadSignedPdf(string $fileUuid): string
     {
+        $this->resolveCredentials();
         if ($this->bypass) {
             Log::info('LibreSign Service: Downloading Signed PDF (BYPASS MOCK)', ['file_uuid' => $fileUuid]);
             // Returns an empty or placeholder PDF or whatever we can write, we will handle this in controllers.
