@@ -206,6 +206,32 @@ class DocumentTemplateService
             throw new \RuntimeException("Erro ao gerar o documento: " . $result->errorOutput());
         }
 
-        return $outputPath;
+        // Converter para PDF usando o LibreOffice
+        $pdfPath = str_replace('.docx', '.pdf', $outputPath);
+        $outputDir = dirname($outputPath);
+        
+        $convertResult = Process::run([
+            '/usr/bin/libreoffice',
+            '--headless',
+            '--convert-to', 'pdf',
+            '--outdir', $outputDir,
+            $outputPath
+        ]);
+
+        if ($convertResult->failed()) {
+            Log::error('Erro ao converter documento para PDF', [
+                'error' => $convertResult->errorOutput(),
+                'output' => $convertResult->output()
+            ]);
+            // Se falhar a conversão, retorna o DOCX mesmo para não quebrar o fluxo
+            return $outputPath;
+        }
+
+        // Remove o arquivo DOCX original para economizar espaço
+        if (file_exists($outputPath)) {
+            unlink($outputPath);
+        }
+
+        return $pdfPath;
     }
 }

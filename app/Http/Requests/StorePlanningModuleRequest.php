@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StorePlanningModuleRequest extends FormRequest
 {
@@ -36,7 +37,12 @@ class StorePlanningModuleRequest extends FormRequest
     {
         return [
             // ── Step 1: Identification ──────────────────────────
-            'reference_code' => ['nullable', 'string', 'max:50', 'unique:procurement_requests,reference_code,' . $this->procurement_request_id],
+            'reference_code' => [
+                'nullable', 
+                'string', 
+                'max:50', 
+                Rule::unique('procurement_requests', 'reference_code')->ignore($this->procurement_request_id ?: null)
+            ],
             'secretaria' => ['required', 'string', 'max:255'],
             'title' => ['required', 'string', 'max:255'],
             'object_summary' => ['required', 'string', 'max:200'],

@@ -42,7 +42,7 @@ class ProcurementRequest extends Model
 
         return match ($this->current_step) {
             self::STEP_ELABORADOR => $user->isElaborador() && $this->status === self::STATUS_RASCUNHO,
-            self::STEP_SECRETARIO => $user->isSecretario() && $this->status === self::STATUS_ASSINADO,
+            self::STEP_SECRETARIO => $user->isSecretario() && ($this->status === self::STATUS_ASSINADO || $this->status === self::STATUS_RASCUNHO),
             self::STEP_GABINETE => $user->isGabinete() && $this->status === self::STATUS_EM_ANALISE,
             default => false,
         };

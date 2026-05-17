@@ -98,8 +98,10 @@ class ModuleOneController extends Controller
             if ($isUpdate) {
                 $procurementRequest = ProcurementRequest::findOrFail($request->procurement_request_id);
                 // Reset status to draft if it was rejected
+                $requestData['status'] = ProcurementRequest::STATUS_RASCUNHO;
+                $requestData['current_step'] = ProcurementRequest::STEP_SECRETARIO;
+                
                 if ($procurementRequest->status === ProcurementRequest::STATUS_REJEITADO) {
-                    $requestData['status'] = ProcurementRequest::STATUS_RASCUNHO;
                     $requestData['rejection_reason'] = null;
                 }
                 $procurementRequest->update($requestData);
@@ -114,7 +116,7 @@ class ModuleOneController extends Controller
 
                 $requestData['user_id'] = auth()->id();
                 $requestData['status'] = ProcurementRequest::STATUS_RASCUNHO;
-                $requestData['current_step'] = ProcurementRequest::STEP_ELABORADOR;
+                $requestData['current_step'] = ProcurementRequest::STEP_SECRETARIO;
                 $requestData['requisition_unit'] = $validated['secretaria'] ?? null;
 
                 $procurementRequest = ProcurementRequest::create($requestData);
@@ -187,8 +189,9 @@ class ModuleOneController extends Controller
         });
 
         return redirect()
-            ->route('planning.module-one.show', $procurementRequest)
-            ->with('status', 'Solicitação processada com sucesso.');
+            ->route('secretaria.dashboard')
+            ->with('success', 'Solicitação processada com sucesso!')
+            ->with('open_modal_id', $procurementRequest->id);
     }
 
     public function destroy(ProcurementRequest $procurementRequest): RedirectResponse

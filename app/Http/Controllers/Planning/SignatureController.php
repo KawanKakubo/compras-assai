@@ -22,7 +22,7 @@ class SignatureController extends Controller
     /**
      * Initializes a signature request with LibreSign.
      */
-    public function initializeSignature(ProcurementRequest $procurementRequest)
+    public function initializeSignature(ProcurementRequest $procurementRequest, \App\Services\Planning\DocumentTemplateService $documentTemplateService)
     {
         $user = auth()->user();
 
@@ -36,15 +36,42 @@ class SignatureController extends Controller
 
         try {
             // 2. Resolve PDF content
-            // If it was rejected, we might need to regenerate it if the elaborator made changes
+            $type = request()->query('type', 'sd');
+            
             if ($procurementRequest->current_step === ProcurementRequest::STEP_ELABORADOR) {
-                $pdfContent = $this->generatePdfContent($procurementRequest);
+                if ($type === 'etp') {
+                    $filePath = $documentTemplateService->generateEtp($procurementRequest);
+                } else {
+                    $filePath = $documentTemplateService->generateSd($procurementRequest);
+                }
+                
+                $pdfContent = file_get_contents($filePath);
+                if (file_exists($filePath)) {
+                    unlink($filePath);
+                }
             } else {
                 // Load previously signed PDF to accumulate signatures
-                if ($procurementRequest->signed_file_path && Storage::disk('public')->exists($procurementRequest->signed_file_path)) {
-                    $pdfContent = Storage::disk('public')->get($procurementRequest->signed_file_path);
+                $previousStep = null;
+                if ($procurementRequest->current_step === ProcurementRequest::STEP_SECRETARIO) {
+                    $previousStep = ProcurementRequest::STEP_ELABORADOR;
+                } elseif ($procurementRequest->current_step === ProcurementRequest::STEP_GABINETE) {
+                    $previousStep = ProcurementRequest::STEP_SECRETARIO;
+                }
+                
+                $previousPath = $previousStep ? "signatures/{$procurementRequest->reference_code}_{$type}_{$previousStep}.pdf" : null;
+                
+                if ($previousPath && Storage::disk('public')->exists($previousPath)) {
+                    $pdfContent = Storage::disk('public')->get($previousPath);
                 } else {
-                    $pdfContent = $this->generatePdfContent($procurementRequest);
+                    if ($type === 'etp') {
+                        $filePath = $documentTemplateService->generateEtp($procurementRequest);
+                    } else {
+                        $filePath = $documentTemplateService->generateSd($procurementRequest);
+                    }
+                    $pdfContent = file_get_contents($filePath);
+                    if (file_exists($filePath)) {
+                        unlink($filePath);
+                    }
                 }
             }
 
@@ -74,13 +101,23 @@ class SignatureController extends Controller
                 ]);
             }
 
-            // 6. Update local tracking fields
+            // 6. Update local tracking fields with metadata for individual files
+            $metadata = $procurementRequest->metadata ?? [];
+            $metadata['signatures'][$type] = [
+                'uuid' => $result['uuid'],
+                'sign_request_uuid' => $result['sign_request_uuid'],
+                'status' => 'pendente',
+                'sign_url' => $signUrl,
+                'signed_at' => null
+            ];
+
             $procurementRequest->update([
                 'libresign_uuid' => $result['uuid'],
                 'libresign_sign_request_uuid' => $result['sign_request_uuid'],
                 'assinatura_status' => 'pendente',
                 'pdf_assinado_url' => $signUrl,
                 'rejection_reason' => null, // Clear reason when restarting
+                'metadata' => $metadata
             ]);
 
             return response()->json([
@@ -94,9 +131,17 @@ class SignatureController extends Controller
                 'request_id' => $procurementRequest->id,
                 'trace' => $e->getTraceAsString()
             ]);
+            $message = 'Falha ao integrar com o Assinador. Por favor, tente novamente.';
+            
+            if (str_contains($e->getMessage(), 'Current user is not logged in')) {
+                $message = 'Você não está autenticado no Assinador. Por favor, realize o login no sistema de assinaturas antes de tentar assinar.';
+            } elseif (str_contains($e->getMessage(), 'Connection refused')) {
+                $message = 'O servidor de assinaturas está fora do ar ou inacessível. Por favor, tente novamente mais tarde.';
+            }
+
             return response()->json([
                 'success' => false,
-                'message' => 'Falha ao integrar com o Assinador: ' . $e->getMessage()
+                'message' => $message
             ], 500);
         }
     }
@@ -156,84 +201,135 @@ class SignatureController extends Controller
      */
     public function verifySignature(ProcurementRequest $procurementRequest)
     {
-        $uuid = $procurementRequest->libresign_uuid;
-
-        if (!$uuid || $procurementRequest->assinatura_status !== 'pendente') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Nenhuma assinatura pendente de verificação para este documento.'
-            ]);
+        $metadata = $procurementRequest->metadata ?? [];
+        $signatures = $metadata['signatures'] ?? [];
+        
+        // Fallback for old records without metadata
+        if (empty($signatures) && $procurementRequest->libresign_uuid) {
+            $signatures['sd'] = [
+                'uuid' => $procurementRequest->libresign_uuid,
+                'status' => 'pendente'
+            ];
         }
 
+        $updated = false;
+        $anyPending = false;
+        $pendingSignUrl = null;
+
         try {
-            // Query LibreSign for the status
-            $check = $this->libresign->checkSignatureStatus($uuid);
-
-            // Status 3 = Concluído (Signed)
-            if ($check['status'] === 3) {
-
-                // Determine new status and target path
-                $stagePath = '';
-                $nextStatus = '';
-                
-                if ($procurementRequest->current_step === ProcurementRequest::STEP_ELABORADOR) {
-                    $stagePath = "signatures/{$procurementRequest->reference_code}_elaborador.pdf";
-                    $nextStatus = ProcurementRequest::STATUS_ASSINADO; // Aguardando Secretário
-                    $nextStep = ProcurementRequest::STEP_SECRETARIO;
-                } elseif ($procurementRequest->current_step === ProcurementRequest::STEP_SECRETARIO) {
-                    $stagePath = "signatures/{$procurementRequest->reference_code}_secretario.pdf";
-                    $nextStatus = ProcurementRequest::STATUS_EM_ANALISE; // Aguardando Gabinete
-                    $nextStep = ProcurementRequest::STEP_GABINETE;
-                } elseif ($procurementRequest->current_step === ProcurementRequest::STEP_GABINETE) {
-                    $stagePath = "signatures/{$procurementRequest->reference_code}_gabinete.pdf";
-                    $nextStatus = ProcurementRequest::STATUS_APROVADO_COMPRAS; // Compras
-                    $nextStep = ProcurementRequest::STEP_COMPRAS;
-                }
-
-                // Download the signed PDF
-                if (config('services.libresign.bypass', true)) {
-                    if ($procurementRequest->signed_file_path && Storage::disk('public')->exists($procurementRequest->signed_file_path)) {
-                        $pdfContent = Storage::disk('public')->get($procurementRequest->signed_file_path);
-                    } else {
-                        $pdfContent = $this->generatePdfContent($procurementRequest);
+            foreach ($signatures as $type => $sig) {
+                if (($sig['status'] ?? '') === 'pendente' && isset($sig['uuid'])) {
+                    $anyPending = true;
+                    $uuid = $sig['uuid'];
+                    
+                    if (!$pendingSignUrl) {
+                        $pendingSignUrl = $sig['sign_url'] ?? null;
                     }
-                } else {
-                    $pdfContent = $this->libresign->downloadSignedPdf($uuid);
+                    
+                    $check = $this->libresign->checkSignatureStatus($uuid);
+                    
+                    if ($check['status'] === 3) {
+                        $metadata['signatures'][$type]['status'] = 'concluido';
+                        $metadata['signatures'][$type]['signed_at'] = now()->toDateTimeString();
+                        $updated = true;
+
+                        // Download and save the file
+                        $stagePath = "signatures/{$procurementRequest->reference_code}_{$type}_{$procurementRequest->current_step}.pdf";
+                        
+                        if (config('services.libresign.bypass', true)) {
+                            $documentTemplateService = app(\App\Services\Planning\DocumentTemplateService::class);
+                            if ($type === 'etp') {
+                                $filePath = $documentTemplateService->generateEtp($procurementRequest);
+                            } else {
+                                $filePath = $documentTemplateService->generateSd($procurementRequest);
+                            }
+                            $pdfContent = file_get_contents($filePath);
+                            if (file_exists($filePath)) {
+                                unlink($filePath);
+                            }
+                        } else {
+                            $pdfContent = $this->libresign->downloadSignedPdf($uuid);
+                        }
+
+                        \Illuminate\Support\Facades\Storage::disk('public')->put($stagePath, $pdfContent);
+                        
+                        // Update the main model fields for the LAST signed file
+                        $procurementRequest->signed_file_path = $stagePath;
+                        $procurementRequest->signature_hash = hash('sha256', $pdfContent);
+                    }
                 }
+            }
 
-                // Save signed PDF to public storage
-                Storage::disk('public')->put($stagePath, $pdfContent);
+            if ($updated) {
+                $sdStatus = $metadata['signatures']['sd']['status'] ?? 'pendente';
+                $etpStatus = $metadata['signatures']['etp']['status'] ?? 'pendente';
 
-                // Update database
+                // We NO LONGER auto-forward to Gabinete!
+                // The Secretary must manually forward after signing!
+                
                 $procurementRequest->update([
-                    'status' => $nextStatus,
-                    'current_step' => $nextStep,
+                    'metadata' => $metadata,
                     'signed_at' => now(),
-                    'signature_hash' => hash('sha256', $pdfContent),
-                    'signed_file_path' => $stagePath,
-                    'assinatura_status' => 'assinado',
+                    'assinatura_status' => ($sdStatus === 'concluido' && $etpStatus === 'concluido') ? 'assinado' : 'parcialmente_assinado'
                 ]);
+
+                session()->flash('success', 'Assinaturas verificadas e atualizadas com sucesso!');
 
                 return response()->json([
                     'success' => true,
                     'message' => 'Assinatura digital autenticada e registrada com sucesso!',
-                    'redirect' => route('planning.module-one.show', $procurementRequest)
+                    'redirect' => url('/secretaria/dashboard')
+                ]);
+            }
+
+            if (!$anyPending) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Nenhuma assinatura pendente de verificação para este documento.'
                 ]);
             }
 
             return response()->json([
                 'success' => false,
-                'status' => $check['status'],
-                'message' => 'O documento ainda está pendente de assinatura no Nextcloud LibreSign.'
+                'message' => 'Os documentos ainda estão pendentes de assinatura no Nextcloud LibreSign.',
+                'sign_url' => $pendingSignUrl
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Erro ao verificar status da assinatura: ' . $e->getMessage());
+            \Illuminate\Support\Facades\Log::error('Erro ao verificar status da assinatura: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Falha ao verificar status: ' . $e->getMessage()
             ], 500);
         }
+    }
+    
+    /**
+     * Encaminha a demanda para o Gabinete.
+     */
+    public function forwardToGabinete(ProcurementRequest $procurementRequest)
+    {
+        $metadata = $procurementRequest->metadata ?? [];
+        $sdStatus = $metadata['signatures']['sd']['status'] ?? 'pendente';
+        $etpStatus = $metadata['signatures']['etp']['status'] ?? 'pendente';
+
+        if ($sdStatus !== 'concluido' || $etpStatus !== 'concluido') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Os documentos precisam estar assinados pelo Secretário antes de encaminhar para o Gabinete.'
+            ], 400);
+        }
+
+        $procurementRequest->update([
+            'status' => ProcurementRequest::STATUS_EM_ANALISE,
+            'current_step' => ProcurementRequest::STEP_GABINETE,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Demanda encaminhada para o Gabinete com sucesso!',
+            'redirect' => url('/secretaria/dashboard')
+        ]);
     }
 
     /**

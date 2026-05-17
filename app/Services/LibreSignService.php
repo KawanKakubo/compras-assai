@@ -252,11 +252,19 @@ class LibreSignService
             }
 
             $data = $response->json();
+            \Illuminate\Support\Facades\Log::info('LibreSign checkSignatureStatus response', ['uuid' => $uuid, 'data' => $data]);
             $ocsData = $data['ocs']['data'] ?? [];
 
             // Find specific file details
             $fileDetails = null;
-            if (isset($ocsData['list']) && is_array($ocsData['list'])) {
+            if (isset($ocsData['data']) && is_array($ocsData['data'])) {
+                foreach ($ocsData['data'] as $item) {
+                    if (($item['uuid'] ?? '') === $uuid) {
+                        $fileDetails = $item;
+                        break;
+                    }
+                }
+            } elseif (isset($ocsData['list']) && is_array($ocsData['list'])) {
                 foreach ($ocsData['list'] as $item) {
                     if (($item['uuid'] ?? '') === $uuid) {
                         $fileDetails = $item;

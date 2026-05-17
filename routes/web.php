@@ -79,6 +79,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/planejamento/modulo-1/{procurementRequest}/signature/reject', [\App\Http\Controllers\Planning\SignatureController::class, 'rejectRequest'])->name('planning.signature.reject');
     Route::get('/planejamento/modulo-1/{procurementRequest}/signature/callback', [\App\Http\Controllers\Planning\SignatureController::class, 'signatureCallback'])->name('planning.signature.callback');
     Route::post('/planejamento/modulo-1/{procurementRequest}/signature/verify', [\App\Http\Controllers\Planning\SignatureController::class, 'verifySignature'])->name('planning.signature.verify');
+    Route::post('/planejamento/modulo-1/{procurementRequest}/signature/forward', [\App\Http\Controllers\Planning\SignatureController::class, 'forwardToGabinete'])->name('planning.signature.forward');
 });
 
 Route::prefix('api/compras-gov')->controller(ComprasGovLookupController::class)->group(function (): void {
